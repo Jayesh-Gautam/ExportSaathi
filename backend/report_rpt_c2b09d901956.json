@@ -1,0 +1,246 @@
+{
+  "report_id": "rpt_c2b09d901956",
+  "status": "completed",
+  "hs_code": {
+    "code": "0902.10",
+    "confidence": 95.0,
+    "description": "Green tea",
+    "alternatives": []
+  },
+  "certifications": [
+    {
+      "id": "fda-food-facility",
+      "name": "FDA Food Facility Registration",
+      "type": "FDA",
+      "mandatory": true,
+      "estimated_cost": {
+        "min": 15000.0,
+        "max": 30000.0,
+        "currency": "INR"
+      },
+      "estimated_timeline_days": 30,
+      "priority": "high"
+    },
+    {
+      "id": "zed-certification",
+      "name": "ZED (Zero Defect Zero Effect) Certification",
+      "type": "ZED",
+      "mandatory": false,
+      "estimated_cost": {
+        "min": 20000.0,
+        "max": 100000.0,
+        "currency": "INR"
+      },
+      "estimated_timeline_days": 90,
+      "priority": "medium"
+    }
+  ],
+  "restricted_substances": [],
+  "past_rejections": [],
+  "compliance_roadmap": [
+    {
+      "step": 1,
+      "title": "Apply for GST LUT",
+      "description": "Submit Letter of Undertaking for GST exemption on exports",
+      "duration_days": 7,
+      "dependencies": []
+    },
+    {
+      "step": 2,
+      "title": "Confirm HS Code Classification",
+      "description": "Verify HS code with customs or trade consultant",
+      "duration_days": 3,
+      "dependencies": []
+    },
+    {
+      "step": 3,
+      "title": "Obtain FDA Food Facility Registration",
+      "description": "Apply for and obtain FDA Food Facility Registration certification",
+      "duration_days": 30,
+      "dependencies": [
+        "Apply for GST LUT"
+      ]
+    },
+    {
+      "step": 4,
+      "title": "Prepare Export Documents",
+      "description": "Generate commercial invoice, packing list, and shipping bill",
+      "duration_days": 5,
+      "dependencies": [
+        "Confirm HS Code Classification"
+      ]
+    },
+    {
+      "step": 5,
+      "title": "Setup Logistics",
+      "description": "Select freight forwarder and book shipment",
+      "duration_days": 7,
+      "dependencies": [
+        "Prepare Export Documents"
+      ]
+    }
+  ],
+  "risks": [],
+  "risk_score": 20,
+  "timeline": {
+    "estimated_days": 107,
+    "breakdown": [
+      {
+        "phase": "Documentation",
+        "duration_days": 10
+      },
+      {
+        "phase": "Certifications",
+        "duration_days": 90
+      },
+      {
+        "phase": "Logistics Setup",
+        "duration_days": 7
+      }
+    ]
+  },
+  "costs": {
+    "certifications": 82500.0,
+    "documentation": 10000.0,
+    "logistics": 25000.0,
+    "total": 117500.0,
+    "currency": "INR"
+  },
+  "subsidies": [
+    {
+      "name": "ZED Certification Subsidy",
+      "amount": 48000.0,
+      "percentage": 80.0,
+      "eligibility": "Micro enterprises only",
+      "application_process": "Apply through ZED portal with company registration documents"
+    },
+    {
+      "name": "RoDTEP (Remission of Duties and Taxes on Exported Products)",
+      "amount": 0.0,
+      "percentage": 1.5,
+      "eligibility": "All exporters",
+      "application_process": "Automatic credit after customs clearance"
+    }
+  ],
+  "action_plan": {
+    "days": [
+      {
+        "day": 1,
+        "title": "Documentation Setup",
+        "tasks": [
+          {
+            "id": "task_gst_lut",
+            "title": "Apply for GST LUT",
+            "description": "Submit Letter of Undertaking for GST exemption on exports",
+            "category": "documentation",
+            "completed": false,
+            "estimated_duration": "2-3 hours",
+            "dependencies": []
+          },
+          {
+            "id": "task_hs_code",
+            "title": "Confirm HS Code",
+            "description": "Verify HS code classification with customs broker",
+            "category": "documentation",
+            "completed": false,
+            "estimated_duration": "1-2 hours",
+            "dependencies": []
+          }
+        ]
+      },
+      {
+        "day": 2,
+        "title": "Certification Applications",
+        "tasks": [
+          {
+            "id": "task_cert_0",
+            "title": "Apply for FDA Food Facility Registration",
+            "description": "Start application process for FDA Food Facility Registration",
+            "category": "certification",
+            "completed": false,
+            "estimated_duration": "3-4 hours",
+            "dependencies": []
+          }
+        ]
+      },
+      {
+        "day": 3,
+        "title": "Document Preparation",
+        "tasks": [
+          {
+            "id": "task_doc_prep",
+            "title": "Gather Required Documents",
+            "description": "Collect all documents needed for certifications",
+            "category": "documentation",
+            "completed": false,
+            "estimated_duration": "4-5 hours",
+            "dependencies": []
+          }
+        ]
+      },
+      {
+        "day": 4,
+        "title": "Export Documentation",
+        "tasks": [
+          {
+            "id": "task_shipping_bill",
+            "title": "Prepare Shipping Bill",
+            "description": "Create shipping bill draft",
+            "category": "documentation",
+            "completed": false,
+            "estimated_duration": "3-4 hours",
+            "dependencies": []
+          }
+        ]
+      },
+      {
+        "day": 5,
+        "title": "Financial Planning",
+        "tasks": [
+          {
+            "id": "task_finance",
+            "title": "Calculate Working Capital",
+            "description": "Estimate working capital requirements and explore financing options",
+            "category": "finance",
+            "completed": false,
+            "estimated_duration": "2-3 hours",
+            "dependencies": []
+          }
+        ]
+      },
+      {
+        "day": 6,
+        "title": "Logistics Planning",
+        "tasks": [
+          {
+            "id": "task_logistics",
+            "title": "Select Freight Forwarder",
+            "description": "Research and select freight forwarder for shipment",
+            "category": "logistics",
+            "completed": false,
+            "estimated_duration": "3-4 hours",
+            "dependencies": []
+          }
+        ]
+      },
+      {
+        "day": 7,
+        "title": "Final Review",
+        "tasks": [
+          {
+            "id": "task_review",
+            "title": "Review Export Readiness",
+            "description": "Review all documents and certifications, ensure everything is in order",
+            "category": "documentation",
+            "completed": false,
+            "estimated_duration": "2-3 hours",
+            "dependencies": []
+          }
+        ]
+      }
+    ],
+    "progress_percentage": 0.0
+  },
+  "retrieved_sources": [],
+  "generated_at": "2026-02-06T05:43:10.613179"
+}

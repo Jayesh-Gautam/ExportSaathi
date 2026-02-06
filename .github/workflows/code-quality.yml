@@ -1,0 +1,107 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for better analysis
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Python quality tools
+      run: |
+        pip install black isort pylint radon
+
+    - name: Check code formatting with Black
+      run: |
+        cd backend
+        black --check . || true
+
+    - name: Check import sorting with isort
+      run: |
+        cd backend
+        isort --check-only . || true
+
+    - name: Lint with Pylint
+      run: |
+        cd backend
+        pylint **/*.py --exit-zero --output-format=text
+
+    - name: Calculate code complexity
+      run: |
+        cd backend
+        radon cc . -a -nb
+
+    - name: Calculate maintainability index
+      run: |
+        cd backend
+        radon mi . -nb
+
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        npm ci
+
+    - name: Check TypeScript formatting
+      run: |
+        cd frontend
+        npx prettier --check "src/**/*.{ts,tsx}" || true
+
+    - name: Run ESLint
+      run: |
+        cd frontend
+        npm run lint || true
+
+  dependency-review:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Dependency Review
+      uses: actions/dependency-review-action@v4
+      with:
+        fail-on-severity: moderate
+
+  codeql-analysis:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      matrix:
+        language: [ 'python', 'javascript' ]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v3
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
