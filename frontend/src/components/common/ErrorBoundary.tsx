@@ -1,3 +1,11 @@
+/**
+ * ErrorBoundary Component
+ * 
+ * Catches and displays React errors gracefully
+ * 
+ * Requirements: 15.5
+ */
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
@@ -10,27 +18,36 @@ interface State {
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
-    hasError: false,
-    error: null,
-  };
-
-  public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+    };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error:', error, errorInfo);
+  static getDerivedStateFromError(error: Error): State {
+    return {
+      hasError: true,
+      error,
+    };
   }
 
-  private handleRetry = () => {
-    this.setState({ hasError: false, error: null });
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+  }
+
+  handleReset = () => {
+    this.setState({
+      hasError: false,
+      error: null,
+    });
   };
 
-  public render() {
+  render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
           <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
             <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full">
               <svg
@@ -53,12 +70,25 @@ export class ErrorBoundary extends Component<Props, State> {
             <p className="mt-2 text-sm text-center text-gray-600">
               We encountered an unexpected error. Please try again.
             </p>
-            <button
-              onClick={this.handleRetry}
-              className="mt-6 w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
-            >
-              Try Again
-            </button>
+            {this.state.error && (
+              <p className="mt-2 text-xs text-center text-gray-500 font-mono">
+                {this.state.error.message}
+              </p>
+            )}
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={this.handleReset}
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={() => window.location.href = '/'}
+                className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300 transition-colors"
+              >
+                Go Home
+              </button>
+            </div>
           </div>
         </div>
       );
@@ -67,3 +97,5 @@ export class ErrorBoundary extends Component<Props, State> {
     return this.props.children;
   }
 }
+
+export default ErrorBoundary;

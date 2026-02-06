@@ -246,13 +246,13 @@ The implementation follows a phased approach:
     - Support FDA, CE, REACH, BIS, ZED, SOFTEX, and others
     - _Requirements: 2.2, 3.8_
 
-  - [ ] 6.6 Enhance risk calculator in report generator
+  - [x] 6.6 Enhance risk calculator in report generator
     - Calculate risk score based on product complexity, destination regulations, historical rejections
     - Identify specific risks with severity levels
     - Generate mitigation strategies for each risk
     - _Requirements: 2.6_
 
-  - [ ] 6.7 Create prompt templates for report generation
+  - [x] 6.7 Create prompt templates for report generation
     - Design master prompt with ExportSathi persona and guardrails
     - Create section-specific prompts (certifications, risks, timeline, costs)
     - Include retrieved documents as context
@@ -559,7 +559,7 @@ The implementation follows a phased approach:
     - **Property 5: API responses are valid JSON with consistent structure**
     - **Validates: Requirements 8.7**
 
-  - [ ] 13.3 Implement certifications API router
+  - [x] 13.3 Implement certifications API router
     - Implement GET /api/certifications endpoint
     - Implement POST /api/certifications/{cert_id}/guidance endpoint
     - Implement GET /api/certifications/{cert_id}/test-labs endpoint
@@ -680,20 +680,20 @@ The implementation follows a phased approach:
     - Configure React Query for server state management
     - _Requirements: 1.1_
 
-  - [ ] 16.2 Create API client service
+  - [x] 16.2 Create API client service
     - Implement API client with methods for all endpoints
     - Add request/response interceptors for error handling
     - Add authentication token management
     - Implement retry logic for failed requests
     - _Requirements: 8.1_
 
-  - [ ] 16.3 Implement custom hooks
+  - [x] 16.3 Implement custom hooks
     - Create useLocalStorage hook for checklist persistence
     - Create useApi hook for API calls with loading/error states
     - Create useAuth hook for authentication state
     - _Requirements: 7.3_
 
-  - [ ] 16.4 Create common components
+  - [x] 16.4 Create common components
     - Implement LoadingSpinner component with progress messages
     - Implement ErrorBoundary component for error handling
     - Create Button, Input, Select, and other form components
@@ -745,7 +745,7 @@ The implementation follows a phased approach:
     - Show report metadata (generated date, status)
     - _Requirements: 2.7_
 
-  - [ ] 18.2 Create HSCodeSection component
+  - [x] 18.2 Create HSCodeSection component
     - Display HS code with confidence percentage
     - Show confidence indicator (color-coded)
     - Display alternative codes if confidence < 70%

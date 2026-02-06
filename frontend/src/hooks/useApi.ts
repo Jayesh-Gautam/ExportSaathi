@@ -1,3 +1,11 @@
+/**
+ * useApi Hook
+ * 
+ * Custom hook for API calls with loading/error states
+ * 
+ * Requirements: 7.3
+ */
+
 import { useState, useCallback } from 'react';
 import { AxiosError } from 'axios';
 
@@ -7,18 +15,14 @@ interface UseApiState<T> {
   error: string | null;
 }
 
-interface UseApiReturn<T, P extends any[]> extends UseApiState<T> {
-  execute: (...params: P) => Promise<T | null>;
+interface UseApiReturn<T> extends UseApiState<T> {
+  execute: (...args: any[]) => Promise<T | null>;
   reset: () => void;
 }
 
-/**
- * Custom hook for API calls with loading and error states
- * @param apiFunction - The API function to call
- */
-export function useApi<T, P extends any[]>(
-  apiFunction: (...params: P) => Promise<{ data: T }>
-): UseApiReturn<T, P> {
+export function useApi<T>(
+  apiFunction: (...args: any[]) => Promise<T>
+): UseApiReturn<T> {
   const [state, setState] = useState<UseApiState<T>>({
     data: null,
     loading: false,
@@ -26,18 +30,18 @@ export function useApi<T, P extends any[]>(
   });
 
   const execute = useCallback(
-    async (...params: P): Promise<T | null> => {
+    async (...args: any[]): Promise<T | null> => {
       setState({ data: null, loading: true, error: null });
-      
+
       try {
-        const response = await apiFunction(...params);
-        setState({ data: response.data, loading: false, error: null });
-        return response.data;
+        const result = await apiFunction(...args);
+        setState({ data: result, loading: false, error: null });
+        return result;
       } catch (err) {
-        const error = err as AxiosError<{ detail?: string }>;
-        const errorMessage = 
-          error.response?.data?.detail || 
-          error.message || 
+        const error = err as AxiosError<{ detail: string }>;
+        const errorMessage =
+          error.response?.data?.detail ||
+          error.message ||
           'An unexpected error occurred';
         
         setState({ data: null, loading: false, error: errorMessage });
@@ -57,3 +61,5 @@ export function useApi<T, P extends any[]>(
     reset,
   };
 }
+
+export default useApi;
