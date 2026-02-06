@@ -259,8 +259,8 @@ class ReportGenerator:
         """
         Identify required certifications based on HS code and destination.
         
-        MVP Implementation: Basic certification mapping with common certifications.
-        This can be enhanced later with RAG-based retrieval from knowledge base.
+        Enhanced Implementation: Uses RAG pipeline to query knowledge base for
+        certification requirements, with fallback to rule-based logic.
         
         Args:
             hs_code: Product HS code
@@ -271,12 +271,173 @@ class ReportGenerator:
         Returns:
             List of required certifications
             
-        Requirements: 2.2
+        Requirements: 2.2, 3.8
         """
         certifications = []
         
-        # MVP: Basic certification rules based on destination and product type
-        # This is a simplified implementation - can be enhanced with RAG later
+        try:
+            # Use RAG to query knowledge base for certification requirements
+            query = f"Required certifications for HS code {hs_code} exporting {product_type} to {destination_country}"
+            
+            logger.info(f"Querying knowledge base for certifications: {query}")
+            documents = self.rag_pipeline.retrieve_documents(query=query, top_k=5)
+            
+            if documents:
+                # Use LLM to extract certification requirements from retrieved documents
+                prompt = self._build_certification_prompt(
+                    hs_code=hs_code,
+                    destination_country=destination_country,
+                    product_type=product_type,
+                    business_type=business_type,
+                    documents=documents
+                )
+                
+                # Generate structured certification list
+                response = self.llm_client.generate_structured(
+                    prompt=prompt,
+                    schema={
+                        "type": "object",
+                        "properties": {
+                            "certifications": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string"},
+                                        "type": {"type": "string"},
+                                        "mandatory": {"type": "boolean"},
+                                        "min_cost": {"type": "number"},
+                                        "max_cost": {"type": "number"},
+                                        "timeline_days": {"type": "number"},
+                                        "priority": {"type": "string"}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                )
+                
+                # Parse LLM response and create Certification objects
+                if response and "certifications" in response:
+                    for cert_data in response["certifications"]:
+                        cert_type = self._parse_certification_type(cert_data.get("type", "other"))
+                        priority = self._parse_priority(cert_data.get("priority", "medium"))
+                        
+                        certifications.append(Certification(
+                            id=cert_data["name"].lower().replace(" ", "-"),
+                            name=cert_data["name"],
+                            type=cert_type,
+                            mandatory=cert_data.get("mandatory", False),
+                            estimated_cost=CostRange(
+                                min=cert_data.get("min_cost", 10000),
+                                max=cert_data.get("max_cost", 50000),
+                                currency="INR"
+                            ),
+                            estimated_timeline_days=cert_data.get("timeline_days", 30),
+                            priority=priority
+                        ))
+                    
+                    logger.info(f"RAG-based identification found {len(certifications)} certifications")
+        
+        except Exception as e:
+            logger.warning(f"RAG-based certification identification failed: {e}. Falling back to rule-based logic.")
+        
+        # Fallback to rule-based logic if RAG fails or returns no results
+        if not certifications:
+            certifications = self._identify_certifications_rule_based(
+                hs_code=hs_code,
+                destination_country=destination_country,
+                product_type=product_type,
+                business_type=business_type
+            )
+        
+        # Always add business-type specific certifications
+        certifications.extend(self._add_business_type_certifications(business_type))
+        
+        # Remove duplicates
+        seen_ids = set()
+        unique_certifications = []
+        for cert in certifications:
+            if cert.id not in seen_ids:
+                seen_ids.add(cert.id)
+                unique_certifications.append(cert)
+        
+        logger.info(f"Identified {len(unique_certifications)} certifications for {destination_country}")
+        return unique_certifications
+    
+    def _build_certification_prompt(
+        self,
+        hs_code: str,
+        destination_country: str,
+        product_type: str,
+        business_type: str,
+        documents: List[Any]
+    ) -> str:
+        """Build prompt for LLM to extract certification requirements."""
+        context = "\n\n".join([
+            f"Document {i+1}:\n{doc.page_content}"
+            for i, doc in enumerate(documents[:3])
+        ])
+        
+        return f"""Based on the following regulatory documents, identify ALL required certifications for exporting this product:
+
+Product: {product_type}
+HS Code: {hs_code}
+Destination: {destination_country}
+Business Type: {business_type}
+
+Regulatory Context:
+{context}
+
+For each certification, provide:
+1. Full certification name
+2. Type (FDA, CE, REACH, BIS, ZED, SOFTEX, or other)
+3. Whether it's mandatory or optional
+4. Estimated cost range in INR (min and max)
+5. Estimated timeline in days
+6. Priority (high, medium, or low)
+
+Focus on certifications that are:
+- Legally required by the destination country
+- Industry-standard for this product type
+- Beneficial for market access
+
+Return ONLY certifications that are specifically relevant to this product and destination."""
+    
+    def _parse_certification_type(self, type_str: str) -> CertificationType:
+        """Parse certification type string to enum."""
+        type_map = {
+            "fda": CertificationType.FDA,
+            "ce": CertificationType.CE,
+            "reach": CertificationType.REACH,
+            "bis": CertificationType.BIS,
+            "zed": CertificationType.ZED,
+            "softex": CertificationType.SOFTEX,
+        }
+        return type_map.get(type_str.lower(), CertificationType.OTHER)
+    
+    def _parse_priority(self, priority_str: str) -> Priority:
+        """Parse priority string to enum."""
+        priority_map = {
+            "high": Priority.HIGH,
+            "medium": Priority.MEDIUM,
+            "low": Priority.LOW,
+        }
+        return priority_map.get(priority_str.lower(), Priority.MEDIUM)
+    
+    def _identify_certifications_rule_based(
+        self,
+        hs_code: str,
+        destination_country: str,
+        product_type: str,
+        business_type: str
+    ) -> List[Certification]:
+        """
+        Rule-based certification identification (fallback method).
+        
+        This is the original MVP logic, kept as a fallback when RAG is unavailable.
+        """
+        certifications = []
         
         # US exports - FDA requirements
         if destination_country.upper() in ["UNITED STATES", "USA", "US"]:
@@ -291,9 +452,21 @@ class ReportGenerator:
                     estimated_timeline_days=30,
                     priority=Priority.HIGH
                 ))
+            
+            # Medical devices and drugs
+            if hs_code[:2] in ["30", "90"]:
+                certifications.append(Certification(
+                    id="fda-medical-device",
+                    name="FDA Medical Device Registration",
+                    type=CertificationType.FDA,
+                    mandatory=True,
+                    estimated_cost=CostRange(min=50000, max=200000, currency="INR"),
+                    estimated_timeline_days=90,
+                    priority=Priority.HIGH
+                ))
         
         # EU exports - CE marking for certain products
-        if destination_country.upper() in ["EUROPEAN UNION", "EU", "GERMANY", "FRANCE", "ITALY", "SPAIN"]:
+        if destination_country.upper() in ["EUROPEAN UNION", "EU", "GERMANY", "FRANCE", "ITALY", "SPAIN", "NETHERLANDS", "BELGIUM"]:
             # Electronics, machinery, toys (simplified check)
             if hs_code[:2] in ["84", "85", "95"]:
                 certifications.append(Certification(
@@ -305,6 +478,36 @@ class ReportGenerator:
                     estimated_timeline_days=60,
                     priority=Priority.HIGH
                 ))
+            
+            # REACH for chemicals
+            if hs_code[:2] in ["28", "29", "38"]:
+                certifications.append(Certification(
+                    id="reach-registration",
+                    name="REACH Registration",
+                    type=CertificationType.REACH,
+                    mandatory=True,
+                    estimated_cost=CostRange(min=100000, max=500000, currency="INR"),
+                    estimated_timeline_days=120,
+                    priority=Priority.HIGH
+                ))
+        
+        # BIS certification for certain products to any destination
+        if hs_code[:2] in ["84", "85"]:  # Electronics and machinery
+            certifications.append(Certification(
+                id="bis-certification",
+                name="BIS (Bureau of Indian Standards) Certification",
+                type=CertificationType.BIS,
+                mandatory=False,
+                estimated_cost=CostRange(min=30000, max=80000, currency="INR"),
+                estimated_timeline_days=45,
+                priority=Priority.MEDIUM
+            ))
+        
+        return certifications
+    
+    def _add_business_type_certifications(self, business_type: str) -> List[Certification]:
+        """Add business-type specific certifications."""
+        certifications = []
         
         # SaaS exports - SOFTEX
         if business_type == "SaaS":
@@ -330,19 +533,6 @@ class ReportGenerator:
                 priority=Priority.MEDIUM
             ))
         
-        # BIS certification for certain products
-        if hs_code[:2] in ["84", "85"]:  # Electronics and machinery
-            certifications.append(Certification(
-                id="bis-certification",
-                name="BIS (Bureau of Indian Standards) Certification",
-                type=CertificationType.BIS,
-                mandatory=False,
-                estimated_cost=CostRange(min=30000, max=80000, currency="INR"),
-                estimated_timeline_days=45,
-                priority=Priority.MEDIUM
-            ))
-        
-        logger.info(f"Identified {len(certifications)} certifications for {destination_country}")
         return certifications
     
     def identify_restricted_substances(
@@ -502,6 +692,8 @@ class ReportGenerator:
         """
         Calculate risk score (0-100) based on product complexity and historical data.
         
+        Enhanced Implementation: More sophisticated risk calculation with multiple factors.
+        
         Args:
             hs_code: HS code prediction
             certifications: Required certifications
@@ -513,48 +705,145 @@ class ReportGenerator:
             
         Requirements: 2.6
         """
-        base_risk = 20  # Base risk for any export
+        base_risk = 10  # Base risk for any export
         risks = []
         
         # Factor 1: HS code confidence (lower confidence = higher risk)
-        if hs_code.confidence < 70:
+        if hs_code.confidence < 50:
+            base_risk += 25
+            risks.append(Risk(
+                title="High HS Code Uncertainty",
+                description=f"HS code prediction confidence is only {hs_code.confidence}%, which may lead to serious customs issues and delays",
+                severity=RiskSeverity.HIGH,
+                mitigation="URGENT: Consult with customs broker or trade consultant to verify HS code before proceeding. Incorrect HS code can result in shipment rejection or penalties."
+            ))
+        elif hs_code.confidence < 70:
             base_risk += 15
             risks.append(Risk(
                 title="HS Code Uncertainty",
                 description=f"HS code prediction confidence is {hs_code.confidence}%, which may lead to customs issues",
                 severity=RiskSeverity.MEDIUM,
-                mitigation="Verify HS code with customs broker or trade consultant before shipping"
+                mitigation="Verify HS code with customs broker or trade consultant before shipping. Consider getting a binding ruling from customs."
+            ))
+        elif hs_code.confidence < 85:
+            base_risk += 5
+            risks.append(Risk(
+                title="Minor HS Code Uncertainty",
+                description=f"HS code prediction confidence is {hs_code.confidence}%. While likely correct, verification is recommended.",
+                severity=RiskSeverity.LOW,
+                mitigation="Double-check HS code classification with product specifications and customs guidelines."
             ))
         
-        # Factor 2: Number of mandatory certifications
+        # Factor 2: Number and complexity of certifications
         mandatory_certs = [c for c in certifications if c.mandatory]
-        if len(mandatory_certs) > 2:
-            base_risk += 10
+        high_priority_certs = [c for c in certifications if c.priority == Priority.HIGH]
+        
+        if len(mandatory_certs) >= 4:
+            base_risk += 20
+            risks.append(Risk(
+                title="High Certification Complexity",
+                description=f"{len(mandatory_certs)} mandatory certifications required, significantly increasing complexity and timeline",
+                severity=RiskSeverity.HIGH,
+                mitigation="Start all certification applications immediately. Consider hiring a specialized consultant to manage the certification process. Budget for 3-6 months timeline."
+            ))
+        elif len(mandatory_certs) >= 2:
+            base_risk += 12
             risks.append(Risk(
                 title="Multiple Certifications Required",
                 description=f"{len(mandatory_certs)} mandatory certifications needed, increasing complexity",
                 severity=RiskSeverity.MEDIUM,
-                mitigation="Start certification applications early and consider hiring a consultant"
+                mitigation="Start certification applications early and track deadlines carefully. Consider hiring a consultant for complex certifications like FDA or CE."
+            ))
+        elif len(mandatory_certs) == 1:
+            base_risk += 5
+            risks.append(Risk(
+                title="Certification Required",
+                description=f"1 mandatory certification needed: {mandatory_certs[0].name}",
+                severity=RiskSeverity.LOW,
+                mitigation=f"Allocate {mandatory_certs[0].estimated_timeline_days} days for certification process. Ensure all documentation is prepared in advance."
             ))
         
-        # Factor 3: Restricted substances
-        if restricted_substances:
+        # Factor 3: High-priority certifications (FDA, CE, REACH)
+        if len(high_priority_certs) > 0:
+            high_priority_names = [c.name for c in high_priority_certs]
+            base_risk += 10
+            risks.append(Risk(
+                title="High-Priority Certifications Required",
+                description=f"Critical certifications required: {', '.join(high_priority_names)}. These are strictly enforced at customs.",
+                severity=RiskSeverity.HIGH,
+                mitigation="Prioritize these certifications above all others. Non-compliance will result in shipment rejection at destination port."
+            ))
+        
+        # Factor 4: Restricted substances
+        if len(restricted_substances) >= 3:
+            base_risk += 30
+            substance_names = [s.name for s in restricted_substances]
+            risks.append(Risk(
+                title="Multiple Restricted Substances Detected",
+                description=f"{len(restricted_substances)} restricted substances found: {', '.join(substance_names)}. This is a critical compliance issue.",
+                severity=RiskSeverity.HIGH,
+                mitigation="URGENT: Reformulate product to remove restricted substances OR obtain special permits/exemptions. Current formulation will be rejected at customs."
+            ))
+        elif len(restricted_substances) > 0:
             base_risk += 20
+            substance_names = [s.name for s in restricted_substances]
             risks.append(Risk(
                 title="Restricted Substances Detected",
-                description=f"{len(restricted_substances)} restricted substances found in product",
+                description=f"{len(restricted_substances)} restricted substance(s) found: {', '.join(substance_names)}",
                 severity=RiskSeverity.HIGH,
-                mitigation="Review product formulation and ensure compliance with destination regulations"
+                mitigation="Review product formulation immediately. Ensure compliance with destination regulations or obtain necessary permits. Document compliance evidence."
             ))
         
-        # Factor 4: Past rejections
-        if past_rejections:
+        # Factor 5: Past rejections
+        if len(past_rejections) >= 3:
+            base_risk += 25
+            risks.append(Risk(
+                title="High Historical Rejection Rate",
+                description=f"Similar products have been rejected {len(past_rejections)} times in the past",
+                severity=RiskSeverity.HIGH,
+                mitigation="Study all past rejection reasons in detail. Implement preventive measures for each issue. Consider pre-shipment inspection by third-party."
+            ))
+        elif len(past_rejections) > 0:
             base_risk += 15
             risks.append(Risk(
                 title="Historical Rejections",
-                description=f"Similar products have been rejected {len(past_rejections)} times",
-                severity=RiskSeverity.HIGH,
-                mitigation="Study past rejection reasons and implement preventive measures"
+                description=f"Similar products have been rejected {len(past_rejections)} time(s)",
+                severity=RiskSeverity.MEDIUM,
+                mitigation="Review past rejection reasons and ensure your product addresses those issues. Document compliance measures."
+            ))
+        
+        # Factor 6: Certification cost burden
+        total_cert_cost = sum(
+            (cert.estimated_cost.min + cert.estimated_cost.max) / 2
+            for cert in certifications
+        )
+        if total_cert_cost > 200000:
+            base_risk += 10
+            risks.append(Risk(
+                title="High Certification Costs",
+                description=f"Total certification costs estimated at ₹{total_cert_cost:,.0f}, which may strain working capital",
+                severity=RiskSeverity.MEDIUM,
+                mitigation="Explore government subsidies (ZED offers 80% subsidy for micro enterprises). Consider pre-shipment credit from banks. Budget for 3-6 month timeline."
+            ))
+        
+        # Factor 7: Long certification timelines
+        max_timeline = max([c.estimated_timeline_days for c in certifications]) if certifications else 0
+        if max_timeline > 90:
+            base_risk += 8
+            risks.append(Risk(
+                title="Extended Certification Timeline",
+                description=f"Longest certification requires {max_timeline} days, delaying export readiness",
+                severity=RiskSeverity.MEDIUM,
+                mitigation="Start certification process immediately. Plan cash flow for extended timeline. Consider parallel processing of multiple certifications."
+            ))
+        
+        # Add general export risks if no specific risks identified
+        if not risks:
+            risks.append(Risk(
+                title="Standard Export Compliance",
+                description="Product appears to have standard export requirements with no major red flags",
+                severity=RiskSeverity.LOW,
+                mitigation="Follow standard export procedures. Ensure all documentation is accurate and complete. Verify HS code classification."
             ))
         
         # Cap risk score at 100
