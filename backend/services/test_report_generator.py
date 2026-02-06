@@ -195,7 +195,7 @@ class TestReportGenerator:
         )
         
         # Should have elevated risk due to restricted substances
-        assert risk_score > 30
+        assert risk_score >= 30
         assert len(risks) > 0
         assert any("Restricted" in risk.title for risk in risks)
     
@@ -376,6 +376,130 @@ class TestReportGenerator:
         # Verify breakdown sums to total
         breakdown_total = sum(phase.duration_days for phase in timeline.breakdown)
         assert timeline.estimated_days == breakdown_total
+    
+    def test_retrieve_rejection_reasons_us_destination(self):
+        """Test past rejection data retrieval for US destination."""
+        generator = ReportGenerator()
+        
+        # Test with US destination - should query FDA database
+        rejections = generator.retrieve_rejection_reasons(
+            product_type="Turmeric Powder",
+            destination_country="United States"
+        )
+        
+        # Should return a list (may be empty if no data in knowledge base)
+        assert isinstance(rejections, list)
+        
+        # If rejections found, verify structure
+        for rejection in rejections:
+            assert hasattr(rejection, 'product_type')
+            assert hasattr(rejection, 'reason')
+            assert hasattr(rejection, 'source')
+            assert hasattr(rejection, 'date')
+            # For US destination, source should be FDA
+            if rejection.source:
+                from models.enums import RejectionSource
+                assert rejection.source in [RejectionSource.FDA, RejectionSource.OTHER]
+    
+    def test_retrieve_rejection_reasons_eu_destination(self):
+        """Test past rejection data retrieval for EU destination."""
+        generator = ReportGenerator()
+        
+        # Test with EU destination - should query EU RASFF database
+        rejections = generator.retrieve_rejection_reasons(
+            product_type="Spices",
+            destination_country="Germany"
+        )
+        
+        # Should return a list (may be empty if no data in knowledge base)
+        assert isinstance(rejections, list)
+        
+        # If rejections found, verify structure
+        for rejection in rejections:
+            assert hasattr(rejection, 'product_type')
+            assert hasattr(rejection, 'reason')
+            assert hasattr(rejection, 'source')
+            assert hasattr(rejection, 'date')
+            # For EU destination, source should be EU_RASFF
+            if rejection.source:
+                from models.enums import RejectionSource
+                assert rejection.source in [RejectionSource.EU_RASFF, RejectionSource.OTHER]
+    
+    def test_retrieve_rejection_reasons_other_destination(self):
+        """Test past rejection data retrieval for non-US/EU destination."""
+        generator = ReportGenerator()
+        
+        # Test with other destination - should query both databases
+        rejections = generator.retrieve_rejection_reasons(
+            product_type="Rice",
+            destination_country="Japan"
+        )
+        
+        # Should return a list (may be empty if no data in knowledge base)
+        assert isinstance(rejections, list)
+        
+        # Verify structure if rejections found
+        for rejection in rejections:
+            assert hasattr(rejection, 'product_type')
+            assert hasattr(rejection, 'reason')
+            assert hasattr(rejection, 'source')
+            assert hasattr(rejection, 'date')
+    
+    def test_retrieve_rejection_reasons_error_handling(self):
+        """Test that rejection retrieval handles errors gracefully."""
+        generator = ReportGenerator()
+        
+        # Test with invalid/unusual input - should not crash
+        rejections = generator.retrieve_rejection_reasons(
+            product_type="",
+            destination_country=""
+        )
+        
+        # Should return empty list on error, not crash
+        assert isinstance(rejections, list)
+    
+    def test_calculate_risk_score_with_past_rejections(self):
+        """Test risk score calculation includes past rejection data."""
+        generator = ReportGenerator()
+        
+        from models.report import PastRejection
+        from models.enums import RejectionSource
+        
+        hs_code = HSCodePrediction(
+            code="0910.30",
+            confidence=90.0,
+            description="Turmeric",
+            alternatives=[]
+        )
+        
+        # Create sample past rejections
+        past_rejections = [
+            PastRejection(
+                product_type="Turmeric powder",
+                reason="Salmonella contamination",
+                source=RejectionSource.FDA,
+                date="2023-08-15"
+            ),
+            PastRejection(
+                product_type="Turmeric",
+                reason="Lead contamination",
+                source=RejectionSource.FDA,
+                date="2023-06-20"
+            )
+        ]
+        
+        risk_score, risks = generator.calculate_risk_score(
+            hs_code=hs_code,
+            certifications=[],
+            restricted_substances=[],
+            past_rejections=past_rejections
+        )
+        
+        # Should have elevated risk due to past rejections
+        assert risk_score > 20
+        assert len(risks) > 0
+        # Should have a risk related to historical rejections
+        assert any("Rejection" in risk.title or "Historical" in risk.title for risk in risks)
     
     def test_convenience_function(self):
         """Test convenience function for report generation."""

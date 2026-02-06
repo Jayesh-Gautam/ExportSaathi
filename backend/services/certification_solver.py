@@ -15,13 +15,13 @@ from datetime import datetime
 from models.certification import (
     Certification,
     CertificationGuidance,
-    Document,
+    DocumentChecklistItem as Document,
     TestLab,
     Consultant,
     Subsidy,
-    MockAuditQuestion,
-    RoadmapStep as CertRoadmapStep
+    MockAuditQuestion
 )
+from models.common import GuidanceStep as CertRoadmapStep
 from models.enums import CertificationType, Priority
 from models.common import CostRange, ContactInfo
 from services.rag_pipeline import RAGPipeline, get_rag_pipeline

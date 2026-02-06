@@ -41,6 +41,22 @@ class Source(BaseModel):
         }
 
 
+class ContactInfo(BaseModel):
+    """Contact information for labs, consultants, etc."""
+    email: Optional[str] = Field(None, description="Email address")
+    phone: Optional[str] = Field(None, description="Phone number")
+    website: Optional[str] = Field(None, description="Website URL")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "contact@example.com",
+                "phone": "+91-22-1234-5678",
+                "website": "https://example.com"
+            }
+        }
+
+
 class GuidanceStep(BaseModel):
     """Step in a guidance or certification process."""
     step_number: int = Field(..., ge=1, description="Step sequence number")

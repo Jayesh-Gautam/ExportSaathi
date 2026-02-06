@@ -2,7 +2,7 @@
 Database package for ExportSathi.
 Provides ORM models, connection management, and session utilities.
 """
-from backend.database.models import (
+from .models import (
     Base,
     User,
     Report,
@@ -15,7 +15,7 @@ from backend.database.models import (
     LogisticsAnalysis,
     UserMetrics,
 )
-from backend.database.connection import (
+from .connection import (
     db_connection,
     get_db,
     init_db,

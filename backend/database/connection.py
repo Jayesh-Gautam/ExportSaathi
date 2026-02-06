@@ -8,8 +8,13 @@ from sqlalchemy.pool import QueuePool
 from contextlib import contextmanager
 from typing import Generator
 import logging
+import sys
+import os
 
-from backend.config import settings
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 

@@ -44,6 +44,7 @@ from models.enums import (
 from services.hs_code_predictor import HSCodePredictor
 from services.rag_pipeline import RAGPipeline, get_rag_pipeline
 from services.llm_client import LLMClient, create_llm_client
+from services.restricted_substances_analyzer import RestrictedSubstancesAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,8 @@ class ReportGenerator:
         self,
         hs_code_predictor: Optional[HSCodePredictor] = None,
         rag_pipeline: Optional[RAGPipeline] = None,
-        llm_client: Optional[LLMClient] = None
+        llm_client: Optional[LLMClient] = None,
+        restricted_substances_analyzer: Optional[RestrictedSubstancesAnalyzer] = None
     ):
         """
         Initialize Report Generator.
@@ -80,10 +82,12 @@ class ReportGenerator:
             hs_code_predictor: HS code prediction service (creates new if None)
             rag_pipeline: RAG pipeline for document retrieval (uses global if None)
             llm_client: LLM client for generation (creates new if None)
+            restricted_substances_analyzer: Restricted substances analyzer (creates new if None)
         """
         self.hs_code_predictor = hs_code_predictor or HSCodePredictor()
         self.rag_pipeline = rag_pipeline or get_rag_pipeline()
         self.llm_client = llm_client or create_llm_client()
+        self.restricted_substances_analyzer = restricted_substances_analyzer or RestrictedSubstancesAnalyzer()
         
         logger.info("ReportGenerator initialized")
     
@@ -158,7 +162,8 @@ class ReportGenerator:
             restricted_substances = self.identify_restricted_substances(
                 ingredients=query.ingredients,
                 bom=query.bom,
-                destination_country=query.destination_country
+                destination_country=query.destination_country,
+                product_name=query.product_name
             )
             
             # Step 4: Retrieve past rejection data (MVP: basic implementation)
@@ -539,51 +544,32 @@ Return ONLY certifications that are specifically relevant to this product and de
         self,
         ingredients: Optional[str],
         bom: Optional[str],
-        destination_country: str
+        destination_country: str,
+        product_name: Optional[str] = None
     ) -> List[RestrictedSubstance]:
         """
         Identify restricted substances from ingredients/BOM.
         
-        MVP Implementation: Basic keyword matching for common restricted substances.
-        Can be enhanced with RAG-based retrieval later.
+        Enhanced Implementation: Uses dedicated RestrictedSubstancesAnalyzer service
+        which combines RAG-based retrieval with keyword matching for comprehensive analysis.
         
         Args:
             ingredients: Product ingredients
             bom: Bill of Materials
             destination_country: Destination country
+            product_name: Optional product name for context
             
         Returns:
             List of restricted substances
             
         Requirements: 2.3
         """
-        restricted = []
-        
-        # Combine ingredients and BOM for analysis
-        content = " ".join(filter(None, [ingredients or "", bom or ""])).lower()
-        
-        if not content:
-            return restricted
-        
-        # MVP: Basic keyword matching for common restricted substances
-        restricted_keywords = {
-            "lead": ("Lead", "Toxic heavy metal", "EU REACH Annex XVII"),
-            "mercury": ("Mercury", "Toxic heavy metal", "EU REACH Annex XVII"),
-            "cadmium": ("Cadmium", "Toxic heavy metal", "EU REACH Annex XVII"),
-            "asbestos": ("Asbestos", "Carcinogenic material", "Banned in most countries"),
-            "phthalates": ("Phthalates", "Endocrine disruptor", "EU REACH Annex XVII"),
-        }
-        
-        for keyword, (name, reason, regulation) in restricted_keywords.items():
-            if keyword in content:
-                restricted.append(RestrictedSubstance(
-                    name=name,
-                    reason=reason,
-                    regulation=regulation
-                ))
-        
-        logger.info(f"Identified {len(restricted)} restricted substances")
-        return restricted
+        return self.restricted_substances_analyzer.analyze(
+            ingredients=ingredients,
+            bom=bom,
+            destination_country=destination_country,
+            product_name=product_name
+        )
     
     def retrieve_rejection_reasons(
         self,
@@ -593,20 +579,154 @@ Return ONLY certifications that are specifically relevant to this product and de
         """
         Retrieve past rejection data from FDA/EU databases.
         
-        MVP Implementation: Returns empty list - can be enhanced with actual database queries.
+        Enhanced Implementation: Uses RAG pipeline to query knowledge base for
+        past rejection data from FDA refusal database and EU RASFF, filtered by
+        product type and destination country.
         
         Args:
             product_type: Product type
             destination_country: Destination country
             
         Returns:
-            List of past rejections
+            List of past rejections with source and date
             
         Requirements: 2.4
         """
-        # MVP: Return empty list - this would query FDA refusal database in full implementation
-        logger.info("Past rejection retrieval not implemented in MVP")
-        return []
+        past_rejections = []
+        
+        try:
+            # Determine which rejection databases to query based on destination
+            sources_to_query = []
+            
+            # Query FDA refusal database for US exports
+            if destination_country.upper() in ["UNITED STATES", "USA", "US"]:
+                sources_to_query.append("FDA")
+            
+            # Query EU RASFF for EU exports
+            eu_countries = [
+                "EUROPEAN UNION", "EU", "GERMANY", "FRANCE", "ITALY", "SPAIN",
+                "NETHERLANDS", "BELGIUM", "AUSTRIA", "PORTUGAL", "GREECE",
+                "SWEDEN", "DENMARK", "FINLAND", "IRELAND", "POLAND", "CZECH REPUBLIC",
+                "HUNGARY", "ROMANIA", "BULGARIA", "CROATIA", "SLOVAKIA", "SLOVENIA",
+                "LITHUANIA", "LATVIA", "ESTONIA", "LUXEMBOURG", "MALTA", "CYPRUS"
+            ]
+            if destination_country.upper() in eu_countries:
+                sources_to_query.append("EU_RASFF")
+            
+            # If no specific source, query both for comprehensive results
+            if not sources_to_query:
+                sources_to_query = ["FDA", "EU_RASFF"]
+            
+            logger.info(f"Querying rejection databases: {sources_to_query} for {product_type} to {destination_country}")
+            
+            # Query each relevant source
+            for source in sources_to_query:
+                # Construct query for rejection data
+                query = f"{source} rejection refusal {product_type} import alert contamination"
+                
+                logger.info(f"Searching {source} database: {query}")
+                
+                # Retrieve relevant documents from knowledge base
+                documents = self.rag_pipeline.retrieve_documents(
+                    query=query,
+                    top_k=5
+                )
+                
+                if documents:
+                    # Use LLM to extract rejection reasons from retrieved documents
+                    prompt = self._build_rejection_extraction_prompt(
+                        product_type=product_type,
+                        destination_country=destination_country,
+                        source=source,
+                        documents=documents
+                    )
+                    
+                    # Generate structured rejection data
+                    response = self.llm_client.generate_structured(
+                        prompt=prompt,
+                        schema={
+                            "type": "object",
+                            "properties": {
+                                "rejections": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "product_type": {"type": "string"},
+                                            "reason": {"type": "string"},
+                                            "date": {"type": "string"}
+                                        },
+                                        "required": ["product_type", "reason", "date"]
+                                    }
+                                }
+                            }
+                        }
+                    )
+                    
+                    # Parse LLM response and create PastRejection objects
+                    if response and "rejections" in response:
+                        for rejection_data in response["rejections"]:
+                            # Map source string to enum
+                            rejection_source = RejectionSource.FDA if source == "FDA" else RejectionSource.EU_RASFF
+                            
+                            past_rejections.append(PastRejection(
+                                product_type=rejection_data["product_type"],
+                                reason=rejection_data["reason"],
+                                source=rejection_source,
+                                date=rejection_data["date"]
+                            ))
+                        
+                        logger.info(f"Found {len(response['rejections'])} rejections from {source}")
+            
+            # Limit to most recent/relevant rejections (max 10)
+            if len(past_rejections) > 10:
+                past_rejections = past_rejections[:10]
+            
+            logger.info(f"Retrieved {len(past_rejections)} total past rejections")
+            
+        except Exception as e:
+            logger.warning(f"Error retrieving past rejection data: {e}. Returning empty list.")
+            # Return empty list on error rather than failing the entire report
+            return []
+        
+        return past_rejections
+    
+    def _build_rejection_extraction_prompt(
+        self,
+        product_type: str,
+        destination_country: str,
+        source: str,
+        documents: List[Any]
+    ) -> str:
+        """Build prompt for LLM to extract past rejection data."""
+        context = "\n\n".join([
+            f"Document {i+1}:\n{doc.page_content}"
+            for i, doc in enumerate(documents[:3])
+        ])
+        
+        return f"""Based on the following {source} regulatory documents, extract past rejection/refusal data for similar products:
+
+Product Type: {product_type}
+Destination: {destination_country}
+Source Database: {source}
+
+Regulatory Context:
+{context}
+
+Extract ALL relevant rejection/refusal cases that are similar to "{product_type}". For each rejection, provide:
+1. Specific product type that was rejected (be as specific as possible)
+2. Detailed reason for rejection (contamination, labeling issue, restricted substance, etc.)
+3. Date of rejection (in YYYY-MM-DD format, or approximate if exact date not available)
+
+Focus on:
+- Rejections that are directly relevant to {product_type}
+- Recent rejections (within last 2-3 years if available)
+- Common patterns or recurring issues
+- Specific contamination or compliance violations
+
+If the documents mention "common rejection reasons" or "frequent violations" for this product category, include those as well.
+
+Return ONLY rejections that are specifically documented in the provided context. Do not invent or assume rejection data."""
     
     def generate_compliance_roadmap(
         self,
