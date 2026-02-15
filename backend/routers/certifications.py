@@ -2,11 +2,14 @@
 Certifications API Router
 Handles certification guidance and progress tracking
 
-Requirements: 8.1
+Requirements: 8.1, 3.7
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional, List
+from uuid import UUID
 import logging
+
+from sqlalchemy.orm import Session
 
 from models.certification import (
     Certification,
@@ -18,6 +21,9 @@ from models.certification import (
 from models.enums import CertificationType
 from models.common import CostRange
 from services.certification_solver import CertificationSolver
+from services.certification_progress import CertificationProgressService
+from services.consultant_marketplace import get_consultant_marketplace
+from database.connection import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -255,35 +261,365 @@ async def get_subsidies(
 @router.put("/{cert_id}/progress")
 async def update_progress(
     cert_id: str,
-    status: str = Query(..., description="Progress status (in-progress/completed)"),
-    report_id: str = Query(..., description="Report ID")
+    user_id: UUID = Query(..., description="User ID"),
+    report_id: UUID = Query(..., description="Report ID"),
+    status: str = Query(..., description="Progress status (not_started/in_progress/completed/rejected)"),
+    documents_completed: Optional[List[str]] = Query(None, description="List of completed document IDs"),
+    notes: Optional[str] = Query(None, description="Optional notes"),
+    db: Session = Depends(get_db)
 ):
     """
     Update certification progress.
     
     Args:
         cert_id: Certification identifier
-        status: Progress status
-        report_id: Associated report ID
+        user_id: User UUID
+        report_id: Report UUID
+        status: Progress status (not_started/in_progress/completed/rejected)
+        documents_completed: Optional list of completed document IDs
+        notes: Optional notes
+        db: Database session
         
     Returns:
         Updated progress status
         
-    Requirements: 8.1
+    Requirements: 3.7, 8.1
     """
     try:
         logger.info(f"Updating progress for {cert_id}: {status}")
         
-        # MVP: Return success without database persistence
-        # In full implementation, this would update the certification_progress table
+        # Validate status
+        valid_statuses = ['not_started', 'in_progress', 'completed', 'rejected']
+        if status not in valid_statuses:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+            )
+        
+        # Initialize progress service
+        progress_service = CertificationProgressService(db)
+        
+        # Check if progress record exists
+        existing_progress = progress_service.get_progress(user_id, report_id, cert_id)
+        
+        if not existing_progress:
+            # Create new progress record if it doesn't exist
+            # We need certification name and type - for MVP, derive from cert_id
+            cert_name = cert_id.replace('-', ' ').title()
+            cert_type = cert_id.split('-')[0].upper() if '-' in cert_id else 'OTHER'
+            
+            existing_progress = progress_service.create_progress(
+                user_id=user_id,
+                report_id=report_id,
+                certification_id=cert_id,
+                certification_name=cert_name,
+                certification_type=cert_type
+            )
+        
+        # Update progress
+        updated_progress = progress_service.update_progress(
+            user_id=user_id,
+            report_id=report_id,
+            certification_id=cert_id,
+            status=status,
+            documents_completed=documents_completed,
+            notes=notes
+        )
+        
+        if not updated_progress:
+            raise HTTPException(status_code=404, detail="Progress record not found")
+        
         return {
             "cert_id": cert_id,
-            "status": status,
-            "report_id": report_id,
-            "updated_at": "2024-01-01T00:00:00Z",
+            "status": updated_progress.status,
+            "report_id": str(updated_progress.report_id),
+            "documents_completed": updated_progress.documents_completed or [],
+            "started_at": updated_progress.started_at.isoformat() if updated_progress.started_at else None,
+            "completed_at": updated_progress.completed_at.isoformat() if updated_progress.completed_at else None,
+            "updated_at": updated_progress.updated_at.isoformat() if updated_progress.updated_at else None,
+            "notes": updated_progress.notes,
             "message": "Progress updated successfully"
         }
     
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error updating progress for {cert_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to update progress")
+        raise HTTPException(status_code=500, detail=f"Failed to update progress: {str(e)}")
+
+
+@router.get("/{cert_id}/progress")
+async def get_progress(
+    cert_id: str,
+    user_id: UUID = Query(..., description="User ID"),
+    report_id: UUID = Query(..., description="Report ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get certification progress.
+    
+    Args:
+        cert_id: Certification identifier
+        user_id: User UUID
+        report_id: Report UUID
+        db: Database session
+        
+    Returns:
+        Current progress status
+        
+    Requirements: 3.7, 8.1
+    """
+    try:
+        logger.info(f"Getting progress for {cert_id}")
+        
+        # Initialize progress service
+        progress_service = CertificationProgressService(db)
+        
+        # Get progress
+        progress = progress_service.get_progress(user_id, report_id, cert_id)
+        
+        if not progress:
+            raise HTTPException(status_code=404, detail="Progress record not found")
+        
+        return {
+            "cert_id": progress.certification_id,
+            "certification_name": progress.certification_name,
+            "certification_type": progress.certification_type,
+            "status": progress.status,
+            "report_id": str(progress.report_id),
+            "documents_completed": progress.documents_completed or [],
+            "started_at": progress.started_at.isoformat() if progress.started_at else None,
+            "completed_at": progress.completed_at.isoformat() if progress.completed_at else None,
+            "updated_at": progress.updated_at.isoformat() if progress.updated_at else None,
+            "notes": progress.notes
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting progress for {cert_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get progress: {str(e)}")
+
+
+@router.put("/{cert_id}/progress/documents/{document_id}")
+async def toggle_document_completion(
+    cert_id: str,
+    document_id: str,
+    user_id: UUID = Query(..., description="User ID"),
+    report_id: UUID = Query(..., description="Report ID"),
+    completed: bool = Query(..., description="Mark as completed (true) or incomplete (false)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Toggle document completion status.
+    
+    Args:
+        cert_id: Certification identifier
+        document_id: Document identifier
+        user_id: User UUID
+        report_id: Report UUID
+        completed: True to mark as completed, False to mark as incomplete
+        db: Database session
+        
+    Returns:
+        Updated progress with document status
+        
+    Requirements: 3.7, 8.1
+    """
+    try:
+        logger.info(f"Toggling document {document_id} for {cert_id}: completed={completed}")
+        
+        # Initialize progress service
+        progress_service = CertificationProgressService(db)
+        
+        # Toggle document completion
+        if completed:
+            updated_progress = progress_service.mark_document_completed(
+                user_id=user_id,
+                report_id=report_id,
+                certification_id=cert_id,
+                document_id=document_id
+            )
+        else:
+            updated_progress = progress_service.mark_document_incomplete(
+                user_id=user_id,
+                report_id=report_id,
+                certification_id=cert_id,
+                document_id=document_id
+            )
+        
+        if not updated_progress:
+            raise HTTPException(status_code=404, detail="Progress record not found")
+        
+        return {
+            "cert_id": cert_id,
+            "document_id": document_id,
+            "completed": completed,
+            "documents_completed": updated_progress.documents_completed or [],
+            "updated_at": updated_progress.updated_at.isoformat() if updated_progress.updated_at else None,
+            "message": f"Document {document_id} marked as {'completed' if completed else 'incomplete'}"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error toggling document {document_id} for {cert_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to toggle document completion: {str(e)}")
+
+
+@router.get("/reports/{report_id}/progress/summary")
+async def get_progress_summary(
+    report_id: UUID,
+    user_id: UUID = Query(..., description="User ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get progress summary for all certifications in a report.
+    
+    Args:
+        report_id: Report UUID
+        user_id: User UUID
+        db: Database session
+        
+    Returns:
+        Progress summary with statistics
+        
+    Requirements: 3.7, 8.1
+    """
+    try:
+        logger.info(f"Getting progress summary for report {report_id}")
+        
+        # Initialize progress service
+        progress_service = CertificationProgressService(db)
+        
+        # Get summary
+        summary = progress_service.get_progress_summary(user_id, report_id)
+        
+        return summary
+    
+    except Exception as e:
+        logger.error(f"Error getting progress summary for report {report_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get progress summary: {str(e)}")
+
+
+
+# Consultant Marketplace Endpoints
+
+@router.get("/consultants/search", response_model=List[Consultant])
+async def search_consultants(
+    certification_type: Optional[str] = Query(None, description="Filter by certification type (e.g., FDA, CE, BIS)"),
+    min_rating: Optional[float] = Query(None, ge=0.0, le=5.0, description="Minimum rating (0-5)"),
+    max_cost: Optional[float] = Query(None, ge=0, description="Maximum cost in INR"),
+    min_experience: Optional[int] = Query(None, ge=0, description="Minimum years of experience"),
+    location: Optional[str] = Query(None, description="Filter by location (partial match)"),
+    specialization: Optional[str] = Query(None, description="Filter by specialization (partial match)"),
+    sort_by: str = Query("rating", description="Sort field (rating, cost, experience)"),
+    sort_order: str = Query("desc", description="Sort order (asc, desc)")
+):
+    """
+    Search and filter consultants in the marketplace.
+    
+    This endpoint provides comprehensive search and filter functionality for finding
+    consultants based on various criteria including certification type, rating, cost,
+    experience, location, and specialization.
+    
+    Args:
+        certification_type: Filter by certification type (e.g., "FDA", "CE", "BIS")
+        min_rating: Minimum rating (0-5)
+        max_cost: Maximum cost (filters by cost_range.max)
+        min_experience: Minimum years of experience
+        location: Filter by location (partial match)
+        specialization: Filter by specialization (partial match)
+        sort_by: Sort field ("rating", "cost", "experience")
+        sort_order: Sort order ("asc" or "desc")
+        
+    Returns:
+        List of matching consultants sorted by specified criteria
+        
+    Requirements: 3.4
+    
+    Example:
+        GET /api/certifications/consultants/search?certification_type=FDA&min_rating=4.0&sort_by=rating
+    """
+    try:
+        logger.info(f"Searching consultants with filters: cert={certification_type}, "
+                   f"rating>={min_rating}, cost<={max_cost}, exp>={min_experience}")
+        
+        # Validate sort parameters
+        valid_sort_by = ["rating", "cost", "experience"]
+        if sort_by not in valid_sort_by:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid sort_by. Must be one of: {', '.join(valid_sort_by)}"
+            )
+        
+        valid_sort_order = ["asc", "desc"]
+        if sort_order not in valid_sort_order:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid sort_order. Must be one of: {', '.join(valid_sort_order)}"
+            )
+        
+        # Get marketplace instance
+        marketplace = get_consultant_marketplace()
+        
+        # Search consultants
+        consultants = marketplace.search_consultants(
+            certification_type=certification_type,
+            min_rating=min_rating,
+            max_cost=max_cost,
+            min_experience=min_experience,
+            location=location,
+            specialization=specialization,
+            sort_by=sort_by,
+            sort_order=sort_order
+        )
+        
+        logger.info(f"Found {len(consultants)} consultants matching criteria")
+        return consultants
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error searching consultants: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to search consultants: {str(e)}")
+
+
+@router.get("/consultants/{consultant_id}", response_model=Consultant)
+async def get_consultant_details(consultant_id: str):
+    """
+    Get detailed information about a specific consultant.
+    
+    Args:
+        consultant_id: Consultant identifier
+        
+    Returns:
+        Complete consultant information including ratings, cost, experience, and contact details
+        
+    Requirements: 3.4
+    
+    Example:
+        GET /api/certifications/consultants/cons-fda-1
+    """
+    try:
+        logger.info(f"Getting details for consultant {consultant_id}")
+        
+        # Get marketplace instance
+        marketplace = get_consultant_marketplace()
+        
+        # Get consultant by ID
+        consultant = marketplace.get_consultant_by_id(consultant_id)
+        
+        if not consultant:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Consultant {consultant_id} not found"
+            )
+        
+        return consultant
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting consultant {consultant_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get consultant details: {str(e)}")

@@ -1,0 +1,110 @@
+{
+  "_template_info": {
+    "name": "Certificate of Origin",
+    "version": "1.0",
+    "compliance": "Export Inspection Council of India and Chamber of Commerce compliant",
+    "description": "Certificate of Origin for proving goods are manufactured/produced in India",
+    "mandatory_fields": [
+      "certificate_number",
+      "date",
+      "exporter.name",
+      "consignee.name",
+      "consignee.country",
+      "transport_details.country_of_origin",
+      "transport_details.country_of_destination",
+      "goods"
+    ],
+    "notes": [
+      "Certificate of Origin proves goods are of Indian origin",
+      "Required for claiming preferential tariffs under FTAs",
+      "Can be issued by Export Inspection Council, Chambers of Commerce, or DGFT",
+      "Different formats for different FTAs (ASEAN, SAFTA, etc.)"
+    ]
+  },
+  "certificate_number": "",
+  "date": "",
+  "certificate_type": "Non-Preferential",
+  "fta_scheme": "",
+  "exporter": {
+    "name": "",
+    "address": "",
+    "city": "",
+    "state": "",
+    "country": "India",
+    "pin_code": "",
+    "iec_code": "",
+    "gstin": ""
+  },
+  "consignee": {
+    "name": "",
+    "address": "",
+    "city": "",
+    "state": "",
+    "country": "",
+    "postal_code": ""
+  },
+  "transport_details": {
+    "vessel_name": "",
+    "voyage_number": "",
+    "port_of_loading": "",
+    "port_of_discharge": "",
+    "country_of_origin": "India",
+    "country_of_destination": "",
+    "mode_of_transport": "Sea",
+    "bill_of_lading_number": "",
+    "date_of_shipment": ""
+  },
+  "invoice_details": {
+    "invoice_number": "",
+    "invoice_date": "",
+    "invoice_value": 0.0,
+    "currency": "USD"
+  },
+  "goods": [],
+  "origin_criteria": {
+    "wholly_obtained": false,
+    "substantially_transformed": false,
+    "value_addition_percentage": 0.0,
+    "manufacturing_process": "",
+    "local_content_percentage": 0.0
+  },
+  "declaration": "The undersigned hereby declares that:\n1. The above details and statement are correct.\n2. All the goods were produced/manufactured in India.\n3. They comply with the origin requirements specified for those goods in the destination country.\n4. The goods satisfy the rules of origin criteria as per the applicable trade agreement (if any).",
+  "issuing_authority": {
+    "name": "Export Inspection Council of India / Chamber of Commerce",
+    "office": "",
+    "address": "",
+    "city": "",
+    "authorized_officer": "",
+    "designation": "",
+    "signature": "",
+    "stamp": "",
+    "date": "",
+    "place": ""
+  },
+  "certificate_types": [
+    "Non-Preferential Certificate of Origin",
+    "Preferential Certificate of Origin (under FTA)",
+    "GSP Certificate of Origin (Form A)",
+    "ASEAN Certificate of Origin",
+    "SAFTA Certificate of Origin",
+    "India-UAE CEPA Certificate",
+    "Other FTA Certificates"
+  ],
+  "fta_schemes": [
+    "ASEAN-India FTA",
+    "India-UAE CEPA",
+    "India-Mauritius CECPA",
+    "SAFTA (South Asian FTA)",
+    "India-Korea CEPA",
+    "India-Japan CEPA",
+    "India-Singapore CECA",
+    "GSP (Generalized System of Preferences)"
+  ],
+  "attachments": [
+    "Copy of Commercial Invoice",
+    "Copy of Packing List",
+    "Manufacturing Process Certificate",
+    "Bill of Materials (if required)",
+    "Copy of IEC"
+  ]
+}

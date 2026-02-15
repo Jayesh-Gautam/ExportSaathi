@@ -1,0 +1,102 @@
+{
+  "_template_info": {
+    "name": "Shipping Bill",
+    "version": "1.0",
+    "compliance": "Indian Customs and DGFT compliant - Form for customs clearance",
+    "description": "India-specific shipping bill template for customs declaration",
+    "mandatory_fields": [
+      "shipping_bill_number",
+      "shipping_bill_date",
+      "exporter.name",
+      "exporter.iec_code",
+      "exporter.gstin",
+      "exporter.ad_code",
+      "port_of_loading",
+      "country_of_final_destination",
+      "items"
+    ],
+    "notes": [
+      "Shipping Bill is the main document for customs clearance of export goods",
+      "Required for claiming duty drawback, IGST refund, and RoDTEP benefits",
+      "Must be filed electronically through ICEGATE portal"
+    ]
+  },
+  "shipping_bill_number": "",
+  "shipping_bill_date": "",
+  "shipping_bill_type": "Export",
+  "exporter": {
+    "name": "",
+    "address": "",
+    "city": "",
+    "state": "",
+    "pin_code": "",
+    "iec_code": "",
+    "gstin": "",
+    "pan": "",
+    "ad_code": "",
+    "email": "",
+    "phone": ""
+  },
+  "consignee": {
+    "name": "",
+    "address": "",
+    "city": "",
+    "country": ""
+  },
+  "port_of_loading": "",
+  "port_of_discharge": "",
+  "country_of_final_destination": "",
+  "nature_of_transaction": "Export",
+  "mode_of_transport": "Sea",
+  "vessel_flight_details": {
+    "name": "",
+    "voyage_flight_number": "",
+    "date_of_departure": ""
+  },
+  "container_details": {
+    "container_number": "",
+    "seal_number": "",
+    "container_type": ""
+  },
+  "items": [],
+  "totals": {
+    "fob_value_inr": 0.0,
+    "freight_inr": 0.0,
+    "insurance_inr": 0.0,
+    "total_invoice_value_inr": 0.0,
+    "fob_value_foreign": 0.0,
+    "currency": "USD"
+  },
+  "exchange_rate": {
+    "rate": 0.0,
+    "date": "",
+    "source": "RBI Reference Rate"
+  },
+  "duty_drawback": {
+    "claimed": false,
+    "rate_percentage": 0.0,
+    "amount_inr": 0.0
+  },
+  "rodtep_claim": {
+    "eligible": false,
+    "rate_percentage": 0.0,
+    "amount_inr": 0.0,
+    "schedule_reference": ""
+  },
+  "igst_refund": {
+    "claimed": false,
+    "amount_inr": 0.0,
+    "lut_number": ""
+  },
+  "customs_house": {
+    "name": "",
+    "code": ""
+  },
+  "declaration": "I/We hereby declare that the particulars given above are true and correct to the best of my/our knowledge and belief and nothing has been concealed therefrom.",
+  "authorized_signatory": {
+    "name": "",
+    "designation": "",
+    "date": "",
+    "place": ""
+  }
+}

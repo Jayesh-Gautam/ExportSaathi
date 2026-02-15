@@ -26,6 +26,7 @@ from models.enums import CertificationType, Priority
 from models.common import CostRange, ContactInfo
 from services.rag_pipeline import RAGPipeline, get_rag_pipeline
 from services.llm_client import LLMClient, create_llm_client
+from services.consultant_marketplace import get_consultant_marketplace
 
 logger = logging.getLogger(__name__)
 
@@ -523,85 +524,9 @@ class CertificationSolver:
         self,
         certification_id: str
     ) -> List[Consultant]:
-        """Find consultants for certification assistance."""
-        consultants = []
-        
-        if "fda" in certification_id.lower():
-            consultants = [
-                Consultant(
-                    id="cons-fda-1",
-                    name="FDA Compliance Experts India",
-                    specialization=["FDA Registration", "Food Safety"],
-                    rating=4.5,
-                    cost_range=CostRange(min=25000, max=75000, currency="INR"),
-                    contact=ContactInfo(
-                        email="info@fdacompliance.in",
-                        phone="+91-98765-43210",
-                        website="https://www.fdacompliance.in"
-                    ),
-                    experience_years=10
-                ),
-                Consultant(
-                    id="cons-fda-2",
-                    name="Global Export Consultants",
-                    specialization=["FDA", "Export Compliance"],
-                    rating=4.3,
-                    cost_range=CostRange(min=30000, max=80000, currency="INR"),
-                    contact=ContactInfo(
-                        email="contact@globalexport.com",
-                        phone="+91-98765-12345",
-                        website="https://www.globalexport.com"
-                    ),
-                    experience_years=8
-                )
-            ]
-        elif "ce" in certification_id.lower():
-            consultants = [
-                Consultant(
-                    id="cons-ce-1",
-                    name="CE Marking Consultants India",
-                    specialization=["CE Marking", "EU Compliance"],
-                    rating=4.6,
-                    cost_range=CostRange(min=40000, max=120000, currency="INR"),
-                    contact=ContactInfo(
-                        email="info@cemarking.in",
-                        phone="+91-98765-67890",
-                        website="https://www.cemarking.in"
-                    ),
-                    experience_years=12
-                ),
-                Consultant(
-                    id="cons-ce-2",
-                    name="EU Compliance Partners",
-                    specialization=["CE", "REACH", "RoHS"],
-                    rating=4.4,
-                    cost_range=CostRange(min=50000, max=150000, currency="INR"),
-                    contact=ContactInfo(
-                        email="contact@eucompliance.com",
-                        phone="+91-98765-11111",
-                        website="https://www.eucompliance.com"
-                    ),
-                    experience_years=15
-                )
-            ]
-        elif "bis" in certification_id.lower():
-            consultants = [
-                Consultant(
-                    id="cons-bis-1",
-                    name="BIS Certification Consultants",
-                    specialization=["BIS", "ISI Mark"],
-                    rating=4.7,
-                    cost_range=CostRange(min=20000, max=60000, currency="INR"),
-                    contact=ContactInfo(
-                        email="info@bisconsultants.in",
-                        phone="+91-98765-22222",
-                        website="https://www.bisconsultants.in"
-                    ),
-                    experience_years=10
-                )
-            ]
-        
-        return consultants
+        """Find consultants for certification assistance using the marketplace."""
+        marketplace = get_consultant_marketplace()
+        return marketplace.get_consultants_for_certification(certification_id, limit=5)
 
     def get_subsidies(
         self,

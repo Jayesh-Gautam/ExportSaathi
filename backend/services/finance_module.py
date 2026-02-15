@@ -35,6 +35,7 @@ from models.finance import (
 )
 from models.enums import CashFlowEventType, CompanySize
 from models.report import ExportReadinessReport
+from services.rodtep_calculator import RoDTEPCalculator
 import json
 
 
@@ -53,14 +54,8 @@ class FinanceModule:
         """
         self.db = db_session
         
-        # RoDTEP rates database (simplified - in production, load from official schedules)
-        self.rodtep_rates = {
-            "0910.30": 2.5,  # Turmeric
-            "6109": 4.3,     # T-shirts
-            "9405": 3.8,     # LED lights
-            "3304": 2.1,     # Beauty products
-            "default": 1.5   # Default rate
-        }
+        # Initialize RoDTEP calculator
+        self.rodtep_calculator = RoDTEPCalculator()
         
         # Pre-shipment credit rates by company size
         self.credit_rates = {
@@ -208,6 +203,9 @@ class FinanceModule:
         """
         Calculate RoDTEP (Remission of Duties and Taxes on Exported Products) benefit.
         
+        Uses the RoDTEPCalculator service to calculate benefits based on
+        official RoDTEP schedules.
+        
         Args:
             hs_code: Harmonized System code
             destination: Destination country
@@ -216,27 +214,11 @@ class FinanceModule:
         Returns:
             RoDTEPBenefit with rate and estimated amount
         """
-        # Get RoDTEP rate for HS code
-        # Try exact match first, then prefix match, then default
-        rate_percentage = self.rodtep_rates.get(hs_code)
-        
-        if rate_percentage is None:
-            # Try prefix match (first 4 digits)
-            hs_prefix = hs_code[:4] if len(hs_code) >= 4 else hs_code
-            rate_percentage = self.rodtep_rates.get(hs_prefix)
-        
-        if rate_percentage is None:
-            # Use default rate
-            rate_percentage = self.rodtep_rates["default"]
-        
-        # Calculate benefit amount
-        estimated_amount = fob_value * (rate_percentage / 100)
-        
-        return RoDTEPBenefit(
+        # Use RoDTEPCalculator service
+        return self.rodtep_calculator.calculate_benefit(
             hs_code=hs_code,
-            rate_percentage=rate_percentage,
-            estimated_amount=estimated_amount,
-            currency="INR"
+            destination=destination,
+            fob_value=fob_value
         )
     
     def estimate_gst_refund(

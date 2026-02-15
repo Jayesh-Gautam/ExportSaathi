@@ -1,0 +1,90 @@
+{
+  "_template_info": {
+    "name": "Commercial Invoice",
+    "version": "1.0",
+    "compliance": "DGFT and Indian Customs compliant",
+    "description": "India-specific commercial invoice template for export documentation",
+    "mandatory_fields": [
+      "invoice_number",
+      "invoice_date",
+      "exporter.name",
+      "exporter.gstin",
+      "exporter.iec_code",
+      "exporter.pan",
+      "consignee.name",
+      "consignee.country",
+      "shipment_details.port_of_loading",
+      "shipment_details.port_of_discharge",
+      "items",
+      "totals.total",
+      "totals.currency"
+    ]
+  },
+  "invoice_number": "",
+  "invoice_date": "",
+  "exporter": {
+    "name": "",
+    "address": "",
+    "city": "",
+    "state": "",
+    "country": "India",
+    "pin_code": "",
+    "gstin": "",
+    "iec_code": "",
+    "pan": "",
+    "email": "",
+    "phone": ""
+  },
+  "consignee": {
+    "name": "",
+    "address": "",
+    "city": "",
+    "state": "",
+    "country": "",
+    "postal_code": "",
+    "tax_id": ""
+  },
+  "buyer": {
+    "name": "",
+    "address": "",
+    "city": "",
+    "country": "",
+    "note": "If different from consignee"
+  },
+  "shipment_details": {
+    "port_of_loading": "",
+    "port_of_discharge": "",
+    "country_of_origin": "India",
+    "country_of_final_destination": "",
+    "terms_of_delivery": "FOB",
+    "mode_of_transport": "Sea",
+    "vessel_flight_number": "",
+    "bill_of_lading_number": ""
+  },
+  "items": [],
+  "totals": {
+    "subtotal": 0.0,
+    "freight": 0.0,
+    "insurance": 0.0,
+    "other_charges": 0.0,
+    "total": 0.0,
+    "currency": "USD"
+  },
+  "payment_terms": "",
+  "bank_details": {
+    "bank_name": "",
+    "branch": "",
+    "account_number": "",
+    "swift_code": "",
+    "ifsc_code": "",
+    "ad_code": ""
+  },
+  "declaration": "We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct. The goods are of Indian origin.",
+  "authorized_signatory": {
+    "name": "",
+    "designation": "",
+    "signature": "",
+    "date": "",
+    "place": ""
+  }
+}

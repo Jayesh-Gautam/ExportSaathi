@@ -1,0 +1,133 @@
+{
+  "_template_info": {
+    "name": "SOFTEX Declaration",
+    "version": "1.0",
+    "compliance": "STPI/SEZ and DGFT compliant for software/service exports",
+    "description": "Software Export (SOFTEX) declaration for SaaS and IT service exporters",
+    "mandatory_fields": [
+      "softex_number",
+      "date",
+      "exporter.name",
+      "exporter.iec_code",
+      "exporter.gstin",
+      "buyer.name",
+      "buyer.country",
+      "service_details.description",
+      "service_details.service_category",
+      "invoice_details.invoice_number",
+      "invoice_details.invoice_value"
+    ],
+    "notes": [
+      "SOFTEX is required for all software and IT service exports from India",
+      "Can be filed through STPI portal or directly with customs",
+      "Required for claiming GST refund and other export benefits",
+      "Service exports are zero-rated under GST"
+    ]
+  },
+  "softex_number": "",
+  "date": "",
+  "declaration_type": "Software/IT Services Export",
+  "exporter": {
+    "name": "",
+    "address": "",
+    "city": "",
+    "state": "",
+    "pin_code": "",
+    "iec_code": "",
+    "gstin": "",
+    "pan": "",
+    "stpi_registration": "",
+    "sez_registration": "",
+    "email": "",
+    "phone": "",
+    "website": ""
+  },
+  "buyer": {
+    "name": "",
+    "address": "",
+    "city": "",
+    "state": "",
+    "country": "",
+    "postal_code": "",
+    "email": "",
+    "tax_id": ""
+  },
+  "service_details": {
+    "description": "",
+    "service_category": "",
+    "service_type": "Software Development",
+    "contract_number": "",
+    "contract_date": "",
+    "contract_value": 0.0,
+    "delivery_mode": "Electronic",
+    "delivery_date": "",
+    "project_duration": "",
+    "technology_used": []
+  },
+  "invoice_details": {
+    "invoice_number": "",
+    "invoice_date": "",
+    "invoice_value": 0.0,
+    "currency": "USD"
+  },
+  "payment_details": {
+    "mode": "Wire Transfer",
+    "payment_terms": "",
+    "bank_name": "",
+    "bank_address": "",
+    "account_number": "",
+    "swift_code": "",
+    "ifsc_code": "",
+    "expected_realization_date": "",
+    "advance_received": 0.0,
+    "balance_due": 0.0
+  },
+  "foreign_exchange_details": {
+    "firc_number": "",
+    "firc_date": "",
+    "amount_realized": 0.0,
+    "realization_date": ""
+  },
+  "export_benefits": {
+    "gst_refund_claimed": false,
+    "gst_refund_amount": 0.0,
+    "lut_number": "",
+    "seis_claimed": false,
+    "other_benefits": []
+  },
+  "service_categories": [
+    "Software Development",
+    "Software Testing",
+    "Software Maintenance",
+    "IT Consulting",
+    "Cloud Services (SaaS/PaaS/IaaS)",
+    "Mobile App Development",
+    "Web Development",
+    "Data Analytics",
+    "AI/ML Services",
+    "Cybersecurity Services",
+    "IT Support Services",
+    "BPO/KPO Services",
+    "Digital Marketing",
+    "Other IT Enabled Services"
+  ],
+  "declaration": "I/We hereby declare that:\n1. The software/services mentioned above have been exported electronically/physically.\n2. The particulars given are true and correct to the best of my/our knowledge.\n3. The export proceeds will be/have been realized in convertible foreign exchange.\n4. The services are in accordance with the contract and have been delivered to the satisfaction of the buyer.\n5. All applicable laws and regulations have been complied with.",
+  "authorized_signatory": {
+    "name": "",
+    "designation": "",
+    "employee_id": "",
+    "date": "",
+    "place": "",
+    "signature": "",
+    "company_seal": ""
+  },
+  "attachments": [
+    "Copy of Invoice",
+    "Copy of Contract/Purchase Order",
+    "Proof of Service Delivery (Acceptance Certificate)",
+    "Bank Realization Certificate (FIRC)",
+    "Copy of IEC",
+    "Copy of GST Registration",
+    "STPI/SEZ Registration (if applicable)"
+  ]
+}

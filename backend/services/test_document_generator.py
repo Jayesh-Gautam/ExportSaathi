@@ -6,7 +6,7 @@ Tests document generation, template loading, auto-fill, and validation.
 
 import pytest
 from datetime import datetime
-from document_generator import DocumentGenerator, get_document_generator
+from services.document_generator import DocumentGenerator, get_document_generator
 from models.enums import DocumentType, ValidationSeverity
 
 

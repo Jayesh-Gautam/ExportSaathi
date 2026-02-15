@@ -1,0 +1,73 @@
+{
+  "_template_info": {
+    "name": "GST Letter of Undertaking (LUT)",
+    "version": "1.0",
+    "compliance": "GST Act 2017 - Rule 96A compliant",
+    "description": "Letter of Undertaking for export without payment of IGST",
+    "mandatory_fields": [
+      "lut_number",
+      "financial_year",
+      "date",
+      "exporter.name",
+      "exporter.gstin",
+      "exporter.pan",
+      "exporter.iec_code",
+      "authorized_signatory.name",
+      "authorized_signatory.designation"
+    ],
+    "notes": [
+      "LUT allows exporters to export goods/services without paying IGST",
+      "Valid for entire financial year",
+      "Must be filed on GST portal before first export",
+      "Separate LUT required for goods and services"
+    ]
+  },
+  "lut_number": "",
+  "financial_year": "",
+  "date": "",
+  "lut_type": "Goods",
+  "exporter": {
+    "name": "",
+    "address": "",
+    "city": "",
+    "state": "",
+    "pin_code": "",
+    "gstin": "",
+    "pan": "",
+    "iec_code": "",
+    "email": "",
+    "phone": ""
+  },
+  "jurisdictional_officer": {
+    "designation": "Assistant/Deputy Commissioner of GST",
+    "office": "",
+    "division": "",
+    "address": "",
+    "city": "",
+    "state": ""
+  },
+  "undertaking": {
+    "export_without_payment_of_igst": true,
+    "comply_with_provisions": true,
+    "furnish_required_documents": true,
+    "accept_consequences_of_contravention": true,
+    "bond_execution_if_required": true
+  },
+  "undertaking_text": "I/We hereby undertake that:\n1. I/We shall export the goods/services without payment of integrated tax under bond or Letter of Undertaking.\n2. I/We shall comply with the provisions of the Central Goods and Services Tax Act, 2017 and the rules made thereunder.\n3. I/We shall furnish all documents as prescribed under the said Act and rules.\n4. I/We accept that in case of contravention of any of the above, I/We shall be liable to penalty as prescribed under the Act.\n5. I/We shall execute a bond in case required by the jurisdictional Commissioner.",
+  "declaration": "I/We hereby solemnly affirm and declare that the information given herein above is true and correct to the best of my/our knowledge and belief and nothing has been concealed therefrom.",
+  "authorized_signatory": {
+    "name": "",
+    "designation": "",
+    "din_pan": "",
+    "date": "",
+    "place": "",
+    "signature": ""
+  },
+  "attachments": [
+    "Copy of IEC",
+    "Copy of GST Registration Certificate",
+    "Copy of PAN Card",
+    "Bank Account Details",
+    "Board Resolution (for companies)"
+  ]
+}

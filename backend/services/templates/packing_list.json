@@ -1,0 +1,63 @@
+{
+  "_template_info": {
+    "name": "Packing List",
+    "version": "1.0",
+    "compliance": "DGFT and Indian Customs compliant",
+    "description": "India-specific packing list template for export shipments",
+    "mandatory_fields": [
+      "packing_list_number",
+      "date",
+      "invoice_number",
+      "exporter.name",
+      "consignee.name",
+      "consignee.country",
+      "packages"
+    ]
+  },
+  "packing_list_number": "",
+  "date": "",
+  "invoice_number": "",
+  "invoice_date": "",
+  "exporter": {
+    "name": "",
+    "address": "",
+    "city": "",
+    "state": "",
+    "country": "India",
+    "pin_code": "",
+    "gstin": "",
+    "iec_code": ""
+  },
+  "consignee": {
+    "name": "",
+    "address": "",
+    "city": "",
+    "state": "",
+    "country": "",
+    "postal_code": ""
+  },
+  "shipment_details": {
+    "port_of_loading": "",
+    "port_of_discharge": "",
+    "vessel_name": "",
+    "voyage_number": "",
+    "container_number": "",
+    "container_type": "",
+    "seal_number": ""
+  },
+  "packages": [],
+  "totals": {
+    "total_packages": 0,
+    "total_gross_weight_kg": 0.0,
+    "total_net_weight_kg": 0.0,
+    "total_volume_cbm": 0.0
+  },
+  "marks_and_numbers": "",
+  "special_instructions": "",
+  "declaration": "We certify that the above packing list is true and correct to the best of our knowledge.",
+  "prepared_by": {
+    "name": "",
+    "designation": "",
+    "date": ""
+  }
+}

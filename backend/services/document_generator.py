@@ -24,6 +24,8 @@ from models.document import (
 )
 from models.enums import DocumentType, ValidationSeverity
 from services.compliance_text_analyzer import ComplianceTextAnalyzer
+from services.document_validator import DocumentValidator
+from services.template_loader import TemplateLoader, get_template_loader
 
 logger = logging.getLogger(__name__)
 
@@ -44,16 +46,24 @@ class DocumentGenerator:
     
     def __init__(
         self,
-        compliance_analyzer: Optional[ComplianceTextAnalyzer] = None
+        compliance_analyzer: Optional[ComplianceTextAnalyzer] = None,
+        document_validator: Optional[DocumentValidator] = None,
+        template_loader: Optional[TemplateLoader] = None
     ):
         """
         Initialize Document Generator.
         
         Args:
             compliance_analyzer: Compliance text analyzer for validation (creates new if None)
+            document_validator: Document validator for comprehensive validation (creates new if None)
+            template_loader: Template loader for loading JSON templates (creates new if None)
         """
         self.compliance_analyzer = compliance_analyzer or ComplianceTextAnalyzer()
-        logger.info("DocumentGenerator initialized")
+        self.document_validator = document_validator or DocumentValidator(
+            compliance_analyzer=self.compliance_analyzer
+        )
+        self.template_loader = template_loader or get_template_loader()
+        logger.info("DocumentGenerator initialized with DocumentValidator and TemplateLoader")
 
     
     def generate_document(
@@ -145,7 +155,32 @@ class DocumentGenerator:
         """
         Get India-specific template for document type.
         
-        Templates are compliant with DGFT and customs requirements.
+        Templates are loaded from JSON files and are compliant with DGFT and customs requirements.
+        
+        Args:
+            document_type: Type of document
+            
+        Returns:
+            Template structure with required fields
+        """
+        try:
+            # Load template from JSON file using TemplateLoader
+            template = self.template_loader.load_template(document_type)
+            
+            # Remove _template_info from the template (metadata only)
+            if "_template_info" in template:
+                template = {k: v for k, v in template.items() if k != "_template_info"}
+            
+            return template
+        except Exception as e:
+            logger.error(f"Error loading template for {document_type}: {e}")
+            # Fallback to hardcoded templates if JSON loading fails
+            logger.warning(f"Falling back to hardcoded template for {document_type}")
+            return self._get_fallback_template(document_type)
+    
+    def _get_fallback_template(self, document_type: DocumentType) -> Dict[str, Any]:
+        """
+        Get fallback hardcoded template if JSON loading fails.
         
         Args:
             document_type: Type of document
@@ -689,13 +724,15 @@ class DocumentGenerator:
         report_data: Dict[str, Any]
     ) -> ValidationResult:
         """
-        Validate document for compliance.
+        Validate document for compliance using DocumentValidator service.
         
-        Performs AI validation checks including:
+        Performs comprehensive AI validation checks including:
         - Port code mismatch detection
         - Invoice format validation
         - GST vs Shipping Bill matching
         - RMS risk trigger detection
+        - AWS Comprehend compliance text validation
+        - Mandatory field validation
         
         Args:
             document_type: Type of document
@@ -704,32 +741,41 @@ class DocumentGenerator:
             
         Returns:
             ValidationResult with errors and warnings
+            
+        Requirements: 4.3, 4.4, 4.8
         """
-        errors = []
-        warnings = []
+        logger.info(f"Validating document using DocumentValidator: {document_type}")
         
-        # Common validations for all documents
-        errors.extend(self._validate_required_fields(document_type, content))
+        # Use DocumentValidator service for comprehensive validation
+        validation_result = self.document_validator.validate(
+            document=content,
+            document_type=document_type
+        )
+        
+        # Add any additional document-specific validations
+        additional_errors = []
+        additional_warnings = []
         
         # Document-specific validations
         if document_type == DocumentType.COMMERCIAL_INVOICE:
-            errors.extend(self._validate_commercial_invoice(content, report_data))
-            warnings.extend(self._check_rms_triggers(content))
+            additional_errors.extend(self._validate_commercial_invoice(content, report_data))
         elif document_type == DocumentType.SHIPPING_BILL:
-            errors.extend(self._validate_shipping_bill(content, report_data))
+            additional_errors.extend(self._validate_shipping_bill(content, report_data))
         elif document_type == DocumentType.GST_LUT:
-            errors.extend(self._validate_gst_lut(content))
+            additional_errors.extend(self._validate_gst_lut(content))
         
-        # Port code validation
-        port_errors = self._validate_port_codes(content)
-        errors.extend(port_errors)
+        # Combine results
+        all_errors = validation_result.errors + additional_errors
+        all_warnings = validation_result.warnings + additional_warnings
         
-        is_valid = len(errors) == 0
+        is_valid = len(all_errors) == 0
+        
+        logger.info(f"Validation complete: is_valid={is_valid}, errors={len(all_errors)}, warnings={len(all_warnings)}")
         
         return ValidationResult(
             is_valid=is_valid,
-            errors=errors,
-            warnings=warnings
+            errors=all_errors,
+            warnings=all_warnings
         )
     
     def _validate_required_fields(

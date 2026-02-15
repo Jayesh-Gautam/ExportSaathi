@@ -4,7 +4,7 @@ Certification-related data models.
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from .enums import CertificationType, Priority
-from .common import CostRange, GuidanceStep, Source
+from .common import CostRange, GuidanceStep, Source, ContactInfo
 
 
 class Certification(BaseModel):
@@ -77,24 +77,38 @@ class TestLab(BaseModel):
 
 class Consultant(BaseModel):
     """Certification consultant information."""
+    id: str = Field(..., description="Unique consultant identifier")
     name: str = Field(..., description="Consultant name")
-    specialization: str = Field(..., description="Area of specialization")
-    rating: float = Field(..., ge=0.0, le=5.0, description="Consultant rating")
+    specialization: List[str] = Field(..., description="Areas of specialization")
+    rating: float = Field(..., ge=0.0, le=5.0, description="Consultant rating (0-5)")
     cost_range: CostRange = Field(..., description="Consultation cost range")
-    contact: str = Field(..., description="Contact information")
+    contact: ContactInfo = Field(..., description="Contact information")
+    experience_years: int = Field(..., ge=0, description="Years of experience")
+    certifications_handled: Optional[List[str]] = Field(default_factory=list, description="List of certifications the consultant specializes in")
+    success_rate: Optional[float] = Field(None, ge=0.0, le=100.0, description="Success rate percentage")
+    location: Optional[str] = Field(None, description="Consultant location")
 
     class Config:
         json_schema_extra = {
             "example": {
+                "id": "cons-fda-1",
                 "name": "Export Compliance Experts",
-                "specialization": "FDA and CE certifications",
+                "specialization": ["FDA Registration", "CE Marking"],
                 "rating": 4.5,
                 "cost_range": {
                     "min": 20000,
                     "max": 50000,
                     "currency": "INR"
                 },
-                "contact": "contact@exportexperts.com"
+                "contact": {
+                    "email": "contact@exportexperts.com",
+                    "phone": "+91-98765-43210",
+                    "website": "https://exportexperts.com"
+                },
+                "experience_years": 10,
+                "certifications_handled": ["FDA", "CE", "BIS"],
+                "success_rate": 95.0,
+                "location": "Mumbai, India"
             }
         }
 
