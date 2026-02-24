@@ -19,7 +19,8 @@ import uuid
 from models.finance import (
     FinanceAnalysis,
     WorkingCapitalAnalysis,
-    RoDTEPBenefit
+    RoDTEPBenefit,
+    PreShipmentCredit
 )
 from services.finance_module import FinanceModule
 from database.connection import get_db
@@ -93,6 +94,24 @@ class WorkingCapitalRequest(BaseModel):
         json_schema_extra = {
             "example": {
                 "report_id": "rpt_123e4567e89b12d3"
+            }
+        }
+
+
+class CreditEligibilityRequest(BaseModel):
+    """Request model for credit eligibility assessment."""
+    report_id: str = Field(..., description="Report ID")
+    order_value: Optional[float] = Field(None, gt=0, description="Order value in INR (optional, uses working capital if not provided)")
+    has_banking_relationship: bool = Field(False, description="Whether company has existing banking relationship with export credit facility")
+    export_history_months: int = Field(0, ge=0, le=240, description="Number of months of export history (0 for first-time exporters)")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "report_id": "rpt_123e4567e89b12d3",
+                "order_value": 200000,
+                "has_banking_relationship": True,
+                "export_history_months": 12
             }
         }
 
@@ -354,4 +373,132 @@ async def calculate_working_capital(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while calculating working capital. Please try again later."
+        )
+
+
+@router.post("/credit-eligibility", response_model=PreShipmentCredit)
+async def assess_credit_eligibility(
+    request: CreditEligibilityRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Assess pre-shipment credit eligibility for an export order.
+    
+    This endpoint evaluates eligibility for pre-shipment credit based on:
+    - Company size (Micro/Small/Medium)
+    - Order value
+    - Banking relationships (existing export credit facility)
+    - Export history (months of export experience)
+    
+    The assessment provides:
+    - Eligibility status
+    - Estimated credit amount (percentage of order value)
+    - Interest rate (adjusted based on relationship and history)
+    - Tenure (loan duration in days)
+    - Required documents and eligibility criteria
+    
+    **Benefits of Banking Relationship:**
+    - 0.5% reduction in interest rate
+    - 5% increase in credit percentage
+    
+    **Benefits of Export History (12+ months):**
+    - 0.5% reduction in interest rate
+    - 5% increase in credit percentage
+    - Longer tenure (120 days vs 90 days)
+    - Simplified documentation requirements
+    
+    **Request Body:**
+    - report_id: Associated export readiness report ID
+    - order_value: Order value in INR (optional, uses working capital if not provided)
+    - has_banking_relationship: Whether company has existing banking relationship (default: false)
+    - export_history_months: Number of months of export history (default: 0)
+    
+    **Returns:**
+    - PreShipmentCredit with eligibility assessment and terms
+    
+    **Errors:**
+    - 400: Invalid report ID format
+    - 404: Report not found
+    - 422: Validation error
+    - 500: Internal server error during assessment
+    
+    **Example:**
+    ```json
+    {
+        "report_id": "rpt_123e4567e89b12d3",
+        "order_value": 200000,
+        "has_banking_relationship": true,
+        "export_history_months": 12
+    }
+    ```
+    
+    **Response:**
+    ```json
+    {
+        "eligible": true,
+        "estimated_amount": 170000,
+        "interest_rate": 7.0,
+        "tenure_days": 120,
+        "requirements": [
+            "Valid export order or Letter of Credit (LC)",
+            "Company registration documents (GST, IEC)",
+            "Bank account with export credit facility",
+            "KYC documents of directors",
+            "Last 6 months bank statements",
+            "Note: Simplified documentation for existing customers"
+        ]
+    }
+    ```
+    
+    Requirements: 5.2, 8.1
+    """
+    try:
+        logger.info(f"Assessing credit eligibility for report: {request.report_id}")
+        
+        # Parse report ID
+        report_uuid = parse_report_id(request.report_id)
+        
+        # Verify report exists
+        db_report = db.query(DBReport).filter(DBReport.id == report_uuid).first()
+        if not db_report:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Report not found: {request.report_id}"
+            )
+        
+        # Assess credit eligibility using FinanceModule service
+        logger.info("Calling FinanceModule credit eligibility assessor...")
+        finance_module = FinanceModule(db)
+        credit_assessment = finance_module.assess_credit_eligibility(
+            report_id=str(report_uuid),
+            order_value=request.order_value,
+            has_banking_relationship=request.has_banking_relationship,
+            export_history_months=request.export_history_months
+        )
+        
+        logger.info(
+            f"Credit eligibility assessed: eligible={credit_assessment.eligible}, "
+            f"amount=₹{credit_assessment.estimated_amount}, rate={credit_assessment.interest_rate}%"
+        )
+        
+        return credit_assessment
+    
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    
+    except ValueError as e:
+        # Validation errors from FinanceModule
+        logger.error(f"Validation error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    
+    except Exception as e:
+        # Unexpected errors
+        logger.error(f"Error assessing credit eligibility: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while assessing credit eligibility. Please try again later."
         )

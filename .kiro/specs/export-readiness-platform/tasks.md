@@ -384,7 +384,7 @@ The implementation follows a phased approach:
     - **Property 23: RoDTEP benefit calculation**
     - **Validates: Requirements 5.3**
 
-  - [ ] 9.3 Implement GST refund estimator
+  - [x] 9.3 Implement GST refund estimator
     - Calculate GST refund amount based on export value
     - Estimate refund timeline (typically 30-60 days)
     - List requirements for GST refund application
@@ -394,13 +394,13 @@ The implementation follows a phased approach:
     - **Property 27: GST refund estimation**
     - **Validates: Requirements 5.8**
 
-  - [ ] 9.4 Create credit eligibility assessor
+  - [x] 9.4 Create credit eligibility assessor
     - Implement logic to assess pre-shipment credit eligibility
     - Consider company size, order value, banking relationships
     - Calculate estimated credit amount and interest rate
     - _Requirements: 5.2_
 
-  - [ ] 9.5 Implement currency hedging advisor
+  - [x] 9.5 Implement currency hedging advisor
     - Provide currency hedging recommendations based on order value
     - Suggest hedging strategies (forward contracts, options)
     - Estimate potential savings from hedging
@@ -431,7 +431,7 @@ The implementation follows a phased approach:
     - **Property 29: RMS probability estimation**
     - **Validates: Requirements 6.2, 6.5**
 
-  - [ ] 10.2 Implement RMS predictor
+  - [x] 10.2 Implement RMS predictor
     - Create RMSPredictor with predict_probability method
     - Load customs RMS rules from knowledge base
     - Identify risk factors based on product, HS code, description
@@ -440,14 +440,14 @@ The implementation follows a phased approach:
     - Provide mitigation tips
     - _Requirements: 6.2, 6.5_
 
-  - [ ] 10.3 Implement freight estimator
+  - [x] 10.3 Implement freight estimator
     - Create FreightEstimator with estimate_cost method
     - Calculate sea freight and air freight costs
     - Consider route, volume, weight, and destination
     - Recommend shipping mode based on urgency and cost
     - _Requirements: 6.4_
 
-  - [ ] 10.4 Implement route analyzer
+  - [x] 10.4 Implement route analyzer
     - Analyze available shipping routes to destination
     - Predict delays based on geopolitical situations (e.g., Red Sea disruptions)
     - Consider seasonal factors affecting transit times
@@ -596,7 +596,7 @@ The implementation follows a phased approach:
     - Implement DELETE /api/chat/{session_id} endpoint
     - _Requirements: 8.1_
 
-  - [-] 13.9 Implement users API router
+  - [ ] 13.9 Implement users API router
     - Implement POST /api/users/register endpoint
     - Implement POST /api/users/login endpoint
     - Implement GET /api/users/profile endpoint

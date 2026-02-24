@@ -130,14 +130,24 @@ class FinanceModule:
     def assess_credit_eligibility(
         self,
         report_id: str,
-        order_value: Optional[float] = None
+        order_value: Optional[float] = None,
+        has_banking_relationship: bool = False,
+        export_history_months: int = 0
     ) -> PreShipmentCredit:
         """
         Assess pre-shipment credit eligibility based on company profile.
         
+        Considers:
+        - Company size (Micro/Small/Medium)
+        - Order value
+        - Banking relationships (existing export credit facility)
+        - Export history
+        
         Args:
             report_id: Report identifier
             order_value: Optional order value (uses working capital if not provided)
+            has_banking_relationship: Whether company has existing banking relationship
+            export_history_months: Number of months of export history (0 for first-time exporters)
             
         Returns:
             PreShipmentCredit with eligibility and terms
@@ -158,22 +168,57 @@ class FinanceModule:
             working_capital = self.calculate_working_capital(report_id)
             order_value = working_capital.total
         
-        # Get credit parameters for company size
+        # Get base credit parameters for company size
         credit_params = self.credit_rates.get(company_size, self.credit_rates[CompanySize.SMALL])
         
-        # Calculate eligible credit amount (percentage of order value)
+        # Base interest rate and max percentage
+        base_interest_rate = credit_params["rate"]
         max_percentage = credit_params["max_percentage"]
-        estimated_amount = order_value * (max_percentage / 100)
         
-        # Interest rate
-        interest_rate = credit_params["rate"]
+        # Adjust interest rate based on banking relationship
+        # Existing banking relationship can reduce interest rate by 0.5-1%
+        interest_rate_adjustment = 0.0
+        if has_banking_relationship:
+            interest_rate_adjustment = -0.5
+        
+        # Adjust based on export history
+        # Established exporters (12+ months) get better rates
+        if export_history_months >= 12:
+            interest_rate_adjustment -= 0.5
+        elif export_history_months >= 6:
+            interest_rate_adjustment -= 0.25
+        
+        # Final interest rate (minimum 6.5%)
+        interest_rate = max(6.5, base_interest_rate + interest_rate_adjustment)
+        
+        # Adjust credit percentage based on relationship and history
+        percentage_adjustment = 0
+        if has_banking_relationship:
+            percentage_adjustment += 5  # 5% more credit
+        if export_history_months >= 12:
+            percentage_adjustment += 5  # Another 5% for established exporters
+        
+        # Final credit percentage (capped at 90%)
+        final_percentage = min(90, max_percentage + percentage_adjustment)
+        
+        # Calculate eligible credit amount
+        estimated_amount = order_value * (final_percentage / 100)
         
         # Tenure: typically 90-180 days for pre-shipment credit
+        # Longer tenure for established exporters
         tenure_days = 90
+        if export_history_months >= 12:
+            tenure_days = 120
+        elif export_history_months >= 6:
+            tenure_days = 105
         
         # Eligibility criteria
-        eligible = True  # Assume eligible if they have a valid export order
+        # First-time exporters with small orders may face challenges
+        eligible = True
+        if order_value < 50000 and export_history_months == 0:
+            eligible = False  # Too small for most banks
         
+        # Build requirements list
         requirements = [
             "Valid export order or Letter of Credit (LC)",
             "Company registration documents (GST, IEC)",
@@ -185,6 +230,15 @@ class FinanceModule:
         # Additional requirements for larger companies
         if company_size == CompanySize.MEDIUM:
             requirements.append("Audited financial statements for last 2 years")
+        
+        # Additional requirements for first-time exporters
+        if export_history_months == 0:
+            requirements.append("Business plan and export strategy document")
+            requirements.append("Collateral or personal guarantee may be required")
+        
+        # Reduced requirements for established banking relationships
+        if has_banking_relationship and export_history_months >= 12:
+            requirements.append("Note: Simplified documentation for existing customers")
         
         return PreShipmentCredit(
             eligible=eligible,
@@ -517,14 +571,18 @@ class FinanceModule:
         destination: str
     ) -> CurrencyHedging:
         """
-        Generate currency hedging recommendations.
+        Generate currency hedging recommendations based on order value.
+        
+        Provides tailored hedging strategies including forward contracts and options
+        to manage foreign exchange risk. Estimates potential savings from hedging
+        based on typical currency volatility.
         
         Args:
             export_value: Export value in INR
             destination: Destination country
             
         Returns:
-            CurrencyHedging with recommendations
+            CurrencyHedging with recommendations, strategies, and estimated savings
         """
         # Determine if hedging is recommended based on export value
         # Typically recommended for exports > 10 lakh INR
@@ -534,21 +592,36 @@ class FinanceModule:
         estimated_savings = 0.0
         
         if recommended:
+            # For large exports, provide comprehensive hedging strategies
             strategies = [
-                "Forward contract for 50-70% of order value to lock in exchange rate",
-                "Currency options for remaining 30-50% to benefit from favorable movements",
-                "Natural hedging: Match foreign currency receivables with payables",
-                "Consult with bank's treasury department for customized solutions"
+                "Forward contract: Lock in exchange rate for 50-70% of order value to protect against adverse currency movements",
+                "Currency options: Use options for remaining 30-50% to benefit from favorable rate movements while limiting downside risk",
+                "Natural hedging: Match foreign currency receivables with payables (e.g., import raw materials in same currency)",
+                "Layered hedging: Stagger forward contracts at different rates to average out exchange rate risk",
+                "Consult with bank's treasury department for customized hedging solutions based on your risk appetite"
             ]
             
             # Estimate savings: assume 2-3% protection against adverse currency movement
+            # Based on typical INR volatility of 3-5% annually
             estimated_savings = export_value * 0.025
+            
+            # Add value-specific recommendations
+            if export_value > 5000000:  # > 50 lakh
+                strategies.append(
+                    "Consider structured products: Participate in favorable movements while protecting downside (consult forex advisor)"
+                )
+                # Higher savings potential for larger orders
+                estimated_savings = export_value * 0.03
         else:
+            # For smaller exports, provide basic monitoring strategies
             strategies = [
-                "Monitor exchange rates regularly",
-                "Consider hedging for future larger orders",
-                "Maintain foreign currency account for natural hedging"
+                "Monitor exchange rates regularly using bank apps or forex platforms",
+                "Consider hedging when order value exceeds ₹10 lakh to protect margins",
+                "Maintain foreign currency account for natural hedging of future transactions",
+                "Build currency risk buffer into pricing (add 2-3% margin for forex volatility)"
             ]
+            # No estimated savings for small exports as hedging costs may exceed benefits
+            estimated_savings = 0.0
         
         return CurrencyHedging(
             recommended=recommended,
@@ -686,7 +759,12 @@ class FinanceModule:
         working_capital = self.calculate_working_capital(report_id)
         
         # Assess pre-shipment credit eligibility
-        pre_shipment_credit = self.assess_credit_eligibility(report_id)
+        # Use default values for optional parameters (first-time exporter, no banking relationship)
+        pre_shipment_credit = self.assess_credit_eligibility(
+            report_id=report_id,
+            has_banking_relationship=False,
+            export_history_months=0
+        )
         
         # Calculate RoDTEP benefit
         hs_code = report.hs_code or "default"

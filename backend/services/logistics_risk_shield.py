@@ -29,6 +29,8 @@ from models.logistics import (
     LogisticsRiskRequest
 )
 from models.enums import ShippingMode, FreightMode, RiskSeverity
+from services.rms_predictor import RMSPredictor
+from services.freight_estimator import FreightEstimator
 
 
 class LogisticsRiskShield:
@@ -45,18 +47,16 @@ class LogisticsRiskShield:
     
     def __init__(self):
         """Initialize the Logistics Risk Shield."""
+        # Initialize RMS Predictor
+        self.rms_predictor = RMSPredictor()
+        
+        # Initialize Freight Estimator
+        self.freight_estimator = FreightEstimator()
+        
         # FCL container capacity in cubic meters
         self.fcl_capacity_cbm = 33.0  # Standard 20ft container
         
-        # RMS risk keywords database
-        self.rms_red_flag_keywords = [
-            "chemical", "powder", "liquid", "explosive", "flammable",
-            "hazardous", "toxic", "radioactive", "weapon", "drug",
-            "pharmaceutical", "medicine", "supplement", "herbal",
-            "ayurvedic", "organic", "natural", "extract", "oil"
-        ]
-        
-        # Product type risk factors
+        # Product type risk factors (used for LCL/FCL comparison)
         self.high_risk_product_types = [
             "food", "beverage", "cosmetic", "pharmaceutical", "chemical",
             "supplement", "herbal", "ayurvedic", "medical device"
@@ -88,58 +88,6 @@ class LogisticsRiskShield:
                 ],
                 "delay_days": 2
             }
-        }
-        
-        # Base freight rates (USD per CBM for sea, USD per kg for air)
-        self.base_freight_rates = {
-            "sea": {
-                "Asia": 50,
-                "Europe": 80,
-                "North America": 100,
-                "Middle East": 60,
-                "Africa": 70,
-                "South America": 110,
-                "Oceania": 90
-            },
-            "air": {
-                "Asia": 3.5,
-                "Europe": 5.0,
-                "North America": 6.0,
-                "Middle East": 4.5,
-                "Africa": 5.5,
-                "South America": 7.0,
-                "Oceania": 6.5
-            }
-        }
-        
-        # Country to region mapping
-        self.country_to_region = {
-            "United States": "North America",
-            "Canada": "North America",
-            "Mexico": "North America",
-            "United Kingdom": "Europe",
-            "Germany": "Europe",
-            "France": "Europe",
-            "Italy": "Europe",
-            "Spain": "Europe",
-            "Netherlands": "Europe",
-            "China": "Asia",
-            "Japan": "Asia",
-            "South Korea": "Asia",
-            "Singapore": "Asia",
-            "Thailand": "Asia",
-            "Vietnam": "Asia",
-            "UAE": "Middle East",
-            "Saudi Arabia": "Middle East",
-            "Qatar": "Middle East",
-            "South Africa": "Africa",
-            "Kenya": "Africa",
-            "Nigeria": "Africa",
-            "Brazil": "South America",
-            "Argentina": "South America",
-            "Chile": "South America",
-            "Australia": "Oceania",
-            "New Zealand": "Oceania"
         }
     
     def analyze_risks(self, request: LogisticsRiskRequest) -> LogisticsRiskAnalysis:
@@ -303,97 +251,30 @@ class LogisticsRiskShield:
         self,
         product_type: str,
         hs_code: str,
-        description: str
+        description: str,
+        export_history: Optional[dict] = None
     ) -> RMSProbability:
         """
         Estimate RMS (Risk Management System) check probability.
         
         RMS is the customs screening system that flags shipments for physical inspection.
+        This method delegates to the RMSPredictor service for detailed analysis.
         
         Args:
             product_type: Type of product
             hs_code: Harmonized System code
             description: Product description
+            export_history: Optional export history data
             
         Returns:
             RMSProbability with percentage, risk factors, and mitigation tips
         """
-        # Base probability: 15% (average RMS check rate)
-        probability = 15.0
-        
-        # Risk factors identified
-        risk_factors: List[str] = []
-        
-        # Detected red flag keywords
-        red_flag_keywords: List[str] = []
-        
-        # Check for high-risk product types
-        is_high_risk_product = any(
-            risk_type.lower() in product_type.lower()
-            for risk_type in self.high_risk_product_types
-        )
-        
-        if is_high_risk_product:
-            probability += 20.0
-            risk_factors.append(f"High-risk product category: {product_type}")
-        
-        # Check for red flag keywords in description
-        description_lower = description.lower()
-        for keyword in self.rms_red_flag_keywords:
-            if keyword in description_lower:
-                red_flag_keywords.append(keyword)
-        
-        if red_flag_keywords:
-            probability += len(red_flag_keywords) * 5.0
-            risk_factors.append(f"Red flag keywords detected: {', '.join(red_flag_keywords)}")
-        
-        # Check HS code risk (certain HS codes are high-risk)
-        high_risk_hs_prefixes = ["29", "30", "33", "38"]  # Chemicals, pharma, cosmetics
-        hs_prefix = hs_code[:2] if len(hs_code) >= 2 else ""
-        
-        if hs_prefix in high_risk_hs_prefixes:
-            probability += 15.0
-            risk_factors.append(f"High-risk HS code category: {hs_prefix}")
-        
-        # Cap probability at 95%
-        probability = min(probability, 95.0)
-        
-        # Determine risk level
-        if probability >= 50:
-            risk_level = RiskSeverity.HIGH
-        elif probability >= 30:
-            risk_level = RiskSeverity.MEDIUM
-        else:
-            risk_level = RiskSeverity.LOW
-        
-        # Generate mitigation tips
-        mitigation_tips = [
-            "Provide detailed and accurate product documentation",
-            "Use specific product descriptions (avoid vague terms)",
-            "Include test certificates and quality reports",
-            "Ensure all documents are consistent and error-free",
-            "Declare correct HS code and product classification"
-        ]
-        
-        if red_flag_keywords:
-            mitigation_tips.append(
-                "Avoid using red flag keywords; use technical/scientific names instead"
-            )
-        
-        if is_high_risk_product:
-            mitigation_tips.append(
-                "Obtain pre-clearance certifications (FDA, FSSAI, etc.) before shipping"
-            )
-            mitigation_tips.append(
-                "Work with experienced customs broker familiar with your product category"
-            )
-        
-        return RMSProbability(
-            probability_percentage=probability,
-            risk_level=risk_level,
-            risk_factors=risk_factors,
-            red_flag_keywords=red_flag_keywords,
-            mitigation_tips=mitigation_tips
+        # Delegate to RMSPredictor service
+        return self.rms_predictor.predict_probability(
+            product_type=product_type,
+            hs_code=hs_code,
+            description=description,
+            export_history=export_history
         )
     
     def predict_route_delays(
@@ -404,15 +285,27 @@ class LogisticsRiskShield:
         """
         Predict route delays based on geopolitical factors and seasonal conditions.
         
+        This method analyzes available shipping routes to the destination country,
+        considering:
+        - Geopolitical situations (e.g., Red Sea disruptions, Suez Canal congestion)
+        - Seasonal factors (monsoon season, winter storms, peak shipping periods)
+        - Transit times for each route
+        - Cost estimates for different routes
+        
         Args:
             destination: Destination country
-            season: Optional season (defaults to current)
+            season: Optional season (winter, spring, summer, fall/monsoon)
+                    If not provided, no seasonal adjustments are applied
             
         Returns:
             RouteAnalysis with available routes and recommendations
         """
-        # Determine region
-        region = self.country_to_region.get(destination, "Asia")
+        # Determine region using FreightEstimator's mapping
+        region = self.freight_estimator._get_region(destination)
+        
+        # Determine seasonal delay factors
+        seasonal_delay = self._get_seasonal_delay(region, season) if season else 0
+        seasonal_factors = self._get_seasonal_factors(region, season) if season else []
         
         # Define available routes based on destination
         routes: List[Route] = []
@@ -420,20 +313,26 @@ class LogisticsRiskShield:
         if region in ["Europe", "North America"]:
             # Route 1: Via Suez Canal (traditional route)
             suez_risk = self.geopolitical_risks.get("Suez Canal", {})
+            suez_factors = suez_risk.get("factors", []).copy()
+            suez_factors.extend(seasonal_factors)
+            
             routes.append(Route(
                 name=f"Mumbai to {destination} via Suez Canal",
-                transit_time_days=25 + suez_risk.get("delay_days", 0),
+                transit_time_days=25 + suez_risk.get("delay_days", 0) + seasonal_delay,
                 delay_risk=suez_risk.get("risk_level", RiskSeverity.MEDIUM),
-                geopolitical_factors=suez_risk.get("factors", []),
+                geopolitical_factors=suez_factors,
                 cost_estimate=self._estimate_route_cost(region, "suez")
             ))
             
             # Route 2: Via Cape of Good Hope (alternative route)
+            cape_factors = ["Longer route but avoids Red Sea tensions"]
+            cape_factors.extend(seasonal_factors)
+            
             routes.append(Route(
                 name=f"Mumbai to {destination} via Cape of Good Hope",
-                transit_time_days=35,
+                transit_time_days=35 + seasonal_delay,
                 delay_risk=RiskSeverity.LOW,
-                geopolitical_factors=["Longer route but avoids Red Sea tensions"],
+                geopolitical_factors=cape_factors,
                 cost_estimate=self._estimate_route_cost(region, "cape")
             ))
             
@@ -448,66 +347,80 @@ class LogisticsRiskShield:
         
         elif region == "Asia":
             # Direct route for Asian destinations
+            asia_factors = seasonal_factors.copy() if seasonal_factors else []
+            
             routes.append(Route(
                 name=f"Mumbai to {destination} (Direct)",
-                transit_time_days=10,
+                transit_time_days=10 + seasonal_delay,
                 delay_risk=RiskSeverity.LOW,
-                geopolitical_factors=[],
+                geopolitical_factors=asia_factors,
                 cost_estimate=self._estimate_route_cost(region, "direct")
             ))
             recommended_route = f"Mumbai to {destination} (Direct)"
         
         elif region == "Middle East":
             # Direct route through Arabian Sea
+            middle_east_factors = seasonal_factors.copy() if seasonal_factors else []
+            
             routes.append(Route(
                 name=f"Mumbai to {destination} via Arabian Sea",
-                transit_time_days=7,
+                transit_time_days=7 + seasonal_delay,
                 delay_risk=RiskSeverity.LOW,
-                geopolitical_factors=[],
+                geopolitical_factors=middle_east_factors,
                 cost_estimate=self._estimate_route_cost(region, "direct")
             ))
             recommended_route = f"Mumbai to {destination} via Arabian Sea"
         
         elif region == "Africa":
             # Route via East Africa
+            africa_factors = ["Port congestion in some African ports"]
+            africa_factors.extend(seasonal_factors)
+            
             routes.append(Route(
                 name=f"Mumbai to {destination} via East Africa",
-                transit_time_days=15,
+                transit_time_days=15 + seasonal_delay,
                 delay_risk=RiskSeverity.MEDIUM,
-                geopolitical_factors=["Port congestion in some African ports"],
+                geopolitical_factors=africa_factors,
                 cost_estimate=self._estimate_route_cost(region, "direct")
             ))
             recommended_route = f"Mumbai to {destination} via East Africa"
         
         elif region == "South America":
             # Route via Cape of Good Hope
+            sa_factors = ["Long transit time", "Weather delays possible"]
+            sa_factors.extend(seasonal_factors)
+            
             routes.append(Route(
                 name=f"Mumbai to {destination} via Cape of Good Hope",
-                transit_time_days=40,
+                transit_time_days=40 + seasonal_delay,
                 delay_risk=RiskSeverity.MEDIUM,
-                geopolitical_factors=["Long transit time", "Weather delays possible"],
+                geopolitical_factors=sa_factors,
                 cost_estimate=self._estimate_route_cost(region, "cape")
             ))
             recommended_route = f"Mumbai to {destination} via Cape of Good Hope"
         
         elif region == "Oceania":
             # Direct route through Southeast Asia
+            oceania_factors = seasonal_factors.copy() if seasonal_factors else []
+            
             routes.append(Route(
                 name=f"Mumbai to {destination} via Southeast Asia",
-                transit_time_days=20,
+                transit_time_days=20 + seasonal_delay,
                 delay_risk=RiskSeverity.LOW,
-                geopolitical_factors=[],
+                geopolitical_factors=oceania_factors,
                 cost_estimate=self._estimate_route_cost(region, "direct")
             ))
             recommended_route = f"Mumbai to {destination} via Southeast Asia"
         
         else:
             # Default route
+            default_factors = seasonal_factors.copy() if seasonal_factors else []
+            
             routes.append(Route(
                 name=f"Mumbai to {destination}",
-                transit_time_days=25,
+                transit_time_days=25 + seasonal_delay,
                 delay_risk=RiskSeverity.MEDIUM,
-                geopolitical_factors=[],
+                geopolitical_factors=default_factors,
                 cost_estimate=self._estimate_route_cost("Asia", "direct")
             ))
             recommended_route = f"Mumbai to {destination}"
@@ -521,49 +434,33 @@ class LogisticsRiskShield:
         self,
         destination: str,
         volume: float,
-        weight: float
+        weight: float,
+        route: Optional[str] = None,
+        urgency: Optional[str] = None
     ) -> FreightEstimate:
         """
         Estimate freight costs for different shipping modes.
+        
+        This method delegates to the FreightEstimator service for detailed
+        cost calculations and shipping mode recommendations.
         
         Args:
             destination: Destination country
             volume: Shipment volume in cubic meters (CBM)
             weight: Shipment weight in kilograms
+            route: Optional specific route for cost adjustments
+            urgency: Optional urgency level for mode recommendation
             
         Returns:
             FreightEstimate with sea and air freight costs
         """
-        # Determine region
-        region = self.country_to_region.get(destination, "Asia")
-        
-        # Get base rates
-        sea_rate_per_cbm = self.base_freight_rates["sea"].get(region, 80)
-        air_rate_per_kg = self.base_freight_rates["air"].get(region, 5.0)
-        
-        # Calculate sea freight (based on volume)
-        sea_freight = volume * sea_rate_per_cbm
-        
-        # Calculate air freight (based on weight or volumetric weight, whichever is higher)
-        # Volumetric weight = volume (CBM) * 167 (conversion factor for air freight)
-        volumetric_weight = volume * 167
-        chargeable_weight = max(weight, volumetric_weight)
-        air_freight = chargeable_weight * air_rate_per_kg
-        
-        # Determine recommended mode
-        # Generally, sea freight is recommended unless:
-        # 1. Air freight is less than 3x sea freight (very light cargo)
-        # 2. Urgent delivery required (not considered here)
-        if air_freight < sea_freight * 3:
-            recommended_mode = FreightMode.AIR
-        else:
-            recommended_mode = FreightMode.SEA
-        
-        return FreightEstimate(
-            sea_freight=sea_freight,
-            air_freight=air_freight,
-            recommended_mode=recommended_mode,
-            currency="USD"
+        # Delegate to FreightEstimator service
+        return self.freight_estimator.estimate_cost(
+            destination=destination,
+            volume=volume,
+            weight=weight,
+            route=route,
+            urgency=urgency
         )
     
     def recommend_insurance(
@@ -615,20 +512,112 @@ class LogisticsRiskShield:
         """
         Detect red flag keywords in product description that may trigger RMS checks.
         
+        This method delegates to the RMSPredictor service.
+        
         Args:
             description: Product description text
             
         Returns:
             List of detected red flag keywords
         """
-        description_lower = description.lower()
-        detected_keywords = []
+        # Delegate to RMSPredictor service
+        return self.rms_predictor._detect_red_flag_keywords(description)
+    
+    
+    def _get_seasonal_delay(self, region: str, season: Optional[str]) -> int:
+        """
+        Calculate seasonal delay in days based on region and season.
         
-        for keyword in self.rms_red_flag_keywords:
-            if keyword in description_lower:
-                detected_keywords.append(keyword)
+        Args:
+            region: Destination region
+            season: Season (winter, spring, summer, fall/monsoon)
+            
+        Returns:
+            Additional delay days due to seasonal factors
+        """
+        if not season:
+            return 0
         
-        return detected_keywords
+        season_lower = season.lower()
+        
+        # Monsoon season (June-September) affects Indian Ocean routes
+        if season_lower in ["monsoon", "fall"]:
+            if region in ["Asia", "Middle East", "Africa"]:
+                return 3  # Monsoon affects routes from India
+            elif region in ["Europe", "North America"]:
+                return 2  # Indirect effect on longer routes
+        
+        # Winter storms (December-February) affect North Atlantic and North Pacific
+        elif season_lower == "winter":
+            if region in ["North America", "Europe"]:
+                return 4  # Winter storms can cause significant delays
+            elif region == "Oceania":
+                return 2  # Southern hemisphere summer, but some weather effects
+        
+        # Peak shipping season (September-November) causes port congestion
+        elif season_lower in ["fall", "autumn"]:
+            # Peak season affects all routes due to increased volume
+            return 2
+        
+        # Spring and summer are generally favorable
+        elif season_lower in ["spring", "summer"]:
+            return 0
+        
+        return 0
+    
+    def _get_seasonal_factors(self, region: str, season: Optional[str]) -> List[str]:
+        """
+        Get seasonal factors affecting shipping routes.
+        
+        Args:
+            region: Destination region
+            season: Season (winter, spring, summer, fall/monsoon)
+            
+        Returns:
+            List of seasonal factors to consider
+        """
+        if not season:
+            return []
+        
+        factors = []
+        season_lower = season.lower()
+        
+        # Monsoon season (June-September)
+        if season_lower in ["monsoon", "fall"]:
+            if region in ["Asia", "Middle East", "Africa"]:
+                factors.append("Monsoon season may cause delays in Indian Ocean routes")
+                factors.append("Increased port congestion during monsoon")
+            elif region in ["Europe", "North America"]:
+                factors.append("Monsoon season may affect departure schedules from India")
+        
+        # Winter storms (December-February)
+        elif season_lower == "winter":
+            if region in ["North America", "Europe"]:
+                factors.append("Winter storms in North Atlantic can cause delays")
+                factors.append("Ice conditions may affect northern ports")
+            elif region == "Oceania":
+                factors.append("Cyclone season in Pacific (December-April)")
+        
+        # Peak shipping season (September-November)
+        elif season_lower in ["fall", "autumn"]:
+            factors.append("Peak shipping season - expect port congestion")
+            factors.append("Longer wait times for vessel space")
+            factors.append("Holiday season rush may affect schedules")
+        
+        # Spring (March-May)
+        elif season_lower == "spring":
+            factors.append("Favorable weather conditions for shipping")
+            if region in ["Asia", "Middle East"]:
+                factors.append("Pre-monsoon period - optimal shipping window")
+        
+        # Summer (June-August)
+        elif season_lower == "summer":
+            if region in ["Europe", "North America"]:
+                factors.append("Peak vacation season may affect port operations")
+            else:
+                factors.append("Generally favorable shipping conditions")
+        
+        return factors
     
     def _estimate_route_cost(self, region: str, route_type: str) -> float:
         """
@@ -641,7 +630,8 @@ class LogisticsRiskShield:
         Returns:
             Estimated cost in USD
         """
-        base_cost = self.base_freight_rates["sea"].get(region, 80) * 20  # 20 CBM container
+        # Use FreightEstimator's base rates
+        base_cost = self.freight_estimator.base_freight_rates["sea"].get(region, 80) * 20  # 20 CBM container
         
         # Adjust based on route type
         if route_type == "cape":

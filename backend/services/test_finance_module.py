@@ -200,6 +200,147 @@ class TestPreShipmentCredit:
         
         # Medium companies should have additional requirements
         assert any("financial statements" in req.lower() for req in result.requirements)
+    
+    def test_assess_credit_eligibility_with_banking_relationship(self, finance_module, mock_db_session, sample_report):
+        """Test credit eligibility with existing banking relationship."""
+        # Setup mock
+        mock_db_session.query.return_value.filter.return_value.first.return_value = sample_report
+        
+        # Assess credit eligibility with banking relationship
+        result = finance_module.assess_credit_eligibility(
+            sample_report.id,
+            order_value=200000,
+            has_banking_relationship=True
+        )
+        
+        # Assertions
+        assert result.eligible is True
+        # Interest rate should be reduced by 0.5% for banking relationship
+        assert result.interest_rate == 7.5  # 8.0 - 0.5
+        # Credit percentage should increase by 5%
+        expected_amount = 200000 * 0.80  # 75% + 5% = 80%
+        assert result.estimated_amount == expected_amount
+    
+    def test_assess_credit_eligibility_with_export_history(self, finance_module, mock_db_session, sample_report):
+        """Test credit eligibility with export history."""
+        # Setup mock
+        mock_db_session.query.return_value.filter.return_value.first.return_value = sample_report
+        
+        # Assess credit eligibility with 12+ months export history
+        result = finance_module.assess_credit_eligibility(
+            sample_report.id,
+            order_value=200000,
+            export_history_months=12
+        )
+        
+        # Assertions
+        assert result.eligible is True
+        # Interest rate should be reduced by 0.5% for export history
+        assert result.interest_rate == 7.5  # 8.0 - 0.5
+        # Credit percentage should increase by 5%
+        expected_amount = 200000 * 0.80  # 75% + 5% = 80%
+        assert result.estimated_amount == expected_amount
+        # Tenure should be longer for established exporters
+        assert result.tenure_days == 120
+    
+    def test_assess_credit_eligibility_established_exporter(self, finance_module, mock_db_session, sample_report):
+        """Test credit eligibility for established exporter with banking relationship."""
+        # Setup mock
+        mock_db_session.query.return_value.filter.return_value.first.return_value = sample_report
+        
+        # Assess credit eligibility with both banking relationship and export history
+        result = finance_module.assess_credit_eligibility(
+            sample_report.id,
+            order_value=200000,
+            has_banking_relationship=True,
+            export_history_months=12
+        )
+        
+        # Assertions
+        assert result.eligible is True
+        # Interest rate should be reduced by 1% total (0.5% + 0.5%)
+        assert result.interest_rate == 7.0  # 8.0 - 1.0
+        # Credit percentage should increase by 10% (5% + 5%)
+        expected_amount = 200000 * 0.85  # 75% + 10% = 85%
+        assert result.estimated_amount == expected_amount
+        # Tenure should be longer
+        assert result.tenure_days == 120
+        # Should have note about simplified documentation
+        assert any("simplified documentation" in req.lower() for req in result.requirements)
+    
+    def test_assess_credit_eligibility_small_order_first_time(self, finance_module, mock_db_session, sample_report):
+        """Test credit eligibility for small order from first-time exporter."""
+        # Setup mock
+        mock_db_session.query.return_value.filter.return_value.first.return_value = sample_report
+        
+        # Assess credit eligibility with small order and no history
+        result = finance_module.assess_credit_eligibility(
+            sample_report.id,
+            order_value=30000,  # Below 50k threshold
+            has_banking_relationship=False,
+            export_history_months=0
+        )
+        
+        # Assertions
+        # Should be ineligible due to small order size and no history
+        assert result.eligible is False
+        # Should still provide terms for reference
+        assert result.interest_rate > 0
+        assert result.estimated_amount > 0
+    
+    def test_assess_credit_eligibility_first_time_exporter_requirements(self, finance_module, mock_db_session, sample_report):
+        """Test that first-time exporters have additional requirements."""
+        # Setup mock
+        mock_db_session.query.return_value.filter.return_value.first.return_value = sample_report
+        
+        # Assess credit eligibility for first-time exporter
+        result = finance_module.assess_credit_eligibility(
+            sample_report.id,
+            order_value=200000,
+            has_banking_relationship=False,
+            export_history_months=0
+        )
+        
+        # Assertions
+        assert result.eligible is True
+        # Should have additional requirements for first-time exporters
+        assert any("business plan" in req.lower() for req in result.requirements)
+        assert any("collateral" in req.lower() or "guarantee" in req.lower() for req in result.requirements)
+    
+    def test_assess_credit_eligibility_interest_rate_floor(self, finance_module, mock_db_session, sample_report):
+        """Test that interest rate has a minimum floor of 6.5%."""
+        # Modify sample report to be micro (lowest base rate of 7.5%)
+        sample_report.company_size = "Micro"
+        mock_db_session.query.return_value.filter.return_value.first.return_value = sample_report
+        
+        # Assess with maximum benefits (banking relationship + export history)
+        result = finance_module.assess_credit_eligibility(
+            sample_report.id,
+            order_value=200000,
+            has_banking_relationship=True,
+            export_history_months=12
+        )
+        
+        # Interest rate should be 6.5% (floor), not 6.5% (7.5 - 1.0)
+        assert result.interest_rate == 6.5
+    
+    def test_assess_credit_eligibility_credit_percentage_cap(self, finance_module, mock_db_session, sample_report):
+        """Test that credit percentage is capped at 90%."""
+        # Modify sample report to be micro (highest base percentage of 80%)
+        sample_report.company_size = "Micro"
+        mock_db_session.query.return_value.filter.return_value.first.return_value = sample_report
+        
+        # Assess with maximum benefits (banking relationship + export history)
+        result = finance_module.assess_credit_eligibility(
+            sample_report.id,
+            order_value=200000,
+            has_banking_relationship=True,
+            export_history_months=12
+        )
+        
+        # Credit percentage should be 90% (cap), not 90% (80 + 5 + 5)
+        expected_amount = 200000 * 0.90
+        assert result.estimated_amount == expected_amount
 
 
 class TestRoDTEPBenefit:
@@ -485,6 +626,10 @@ class TestEdgeCases:
         # Should not recommend hedging for small exports
         assert result.recommended is False
         assert len(result.strategies) > 0
+        # Small exports should have zero estimated savings
+        assert result.estimated_savings == 0.0
+        # Should include monitoring strategies
+        assert any("monitor" in s.lower() for s in result.strategies)
     
     def test_currency_hedging_large_export(self, finance_module):
         """Test currency hedging for large export value."""
@@ -497,6 +642,28 @@ class TestEdgeCases:
         assert result.recommended is True
         assert len(result.strategies) > 0
         assert result.estimated_savings > 0
+        # Should include forward contracts and options
+        assert any("forward" in s.lower() for s in result.strategies)
+        assert any("option" in s.lower() for s in result.strategies)
+        # Estimated savings should be around 2.5% for medium-sized exports
+        expected_savings = 2000000 * 0.025
+        assert abs(result.estimated_savings - expected_savings) < 1000
+    
+    def test_currency_hedging_very_large_export(self, finance_module):
+        """Test currency hedging for very large export value (>50 lakh)."""
+        result = finance_module.generate_currency_hedging_advice(
+            export_value=6000000,  # 60 lakh (very large export)
+            destination="United Kingdom"
+        )
+        
+        # Should recommend hedging
+        assert result.recommended is True
+        assert len(result.strategies) > 0
+        # Should have higher estimated savings (3% for very large exports)
+        expected_savings = 6000000 * 0.03
+        assert abs(result.estimated_savings - expected_savings) < 1000
+        # Should include structured products recommendation
+        assert any("structured" in s.lower() for s in result.strategies)
 
 
 if __name__ == "__main__":
